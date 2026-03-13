@@ -125,14 +125,14 @@ Louis Philippe,T-Shirt,M,45.67,45.67,27.56,Oversized,Garment
 Louis Philippe,T-Shirt,L,47.64,47.64,28.74,Oversized,Garment
 Louis Philippe,T-Shirt,XL,49.61,49.61,29.53,Oversized,Garment
 Louis Philippe,T-Shirt,XXL,51.57,51.57,30.71,Oversized,Garment
-Marks & Spencer,T-Shirt,XS,32,34,29,Regular,Body
-Marks & Spencer,T-Shirt,S,35,37,29,Regular,Body
-Marks & Spencer,T-Shirt,M,38,40,29,Regular,Body
-Marks & Spencer,T-Shirt,L,41,43,29,Regular,Body
-Marks & Spencer,T-Shirt,XL,44,46,29,Regular,Body
-Marks & Spencer,T-Shirt,2XL,47,49,29,Regular,Body
-Marks & Spencer,T-Shirt,3XL,50,52,29,Regular,Body
-Marks & Spencer,T-Shirt,4XL,53,55,29,Regular,Body
+Marks&Spencer,T-Shirt,XS,32,34,29,Regular,Body
+Marks&Spencer,T-Shirt,S,35,37,29,Regular,Body
+Marks&Spencer,T-Shirt,M,38,40,29,Regular,Body
+Marks&Spencer,T-Shirt,L,41,43,29,Regular,Body
+Marks&Spencer,T-Shirt,XL,44,46,29,Regular,Body
+Marks&Spencer,T-Shirt,2XL,47,49,29,Regular,Body
+Marks&Spencer,T-Shirt,3XL,50,52,29,Regular,Body
+Marks&Spencer,T-Shirt,4XL,53,55,29,Regular,Body
 Max Fashion,T-Shirt,XS,34,34,,Regular,Body
 Max Fashion,T-Shirt,S,36,36,,Regular,Body
 Max Fashion,T-Shirt,M,38,38,,Regular,Body
@@ -243,6 +243,7 @@ Xyxx,T-Shirt,XXL,43,44,,Regular,Body
 Zara,T-Shirt,M,40.2,40.2,25.6,Regular,Garment
 Zara,T-Shirt,L,41,41,26.4,Regular,Garment
 Zara,T-Shirt,XL,41.8,41.8,27.2,Regular,Garment
+
 
 
 
