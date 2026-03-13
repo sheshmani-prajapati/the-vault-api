@@ -37,12 +37,12 @@ Crimsoune Club,T-Shirt,L,42,42,28,Oversize,Garment
 Crimsoune Club,T-Shirt,XL,44,44,28.5,Oversize,Garment
 Crimsoune Club,T-Shirt,2XL,46,46,30,Oversize,Garment
 Crimsoune Club,T-Shirt,3XL,48,48,31,Oversize,Garment
-Crocodile,T-Shirt,S/39,39.4,39.4,27.2,Regular,Garment
-Crocodile,T-Shirt,M/40,40.9,40.9,27.6,Regular,Garment
-Crocodile,T-Shirt,L/42,42.5,42.5,28.3,Regular,Garment
-Crocodile,T-Shirt,XL/44,44.1,44.1,29.1,Regular,Garment
-Crocodile,T-Shirt,XXL/46,45.7,45.7,29.9,Regular,Garment
-Crocodile,T-Shirt,XXXL/48,47.2,47.2,30.7,Regular,Garment
+Crocodile,T-Shirt,S,39.4,39.4,27.2,Regular,Garment
+Crocodile,T-Shirt,M,40.9,40.9,27.6,Regular,Garment
+Crocodile,T-Shirt,L,42.5,42.5,28.3,Regular,Garment
+Crocodile,T-Shirt,XL,44.1,44.1,29.1,Regular,Garment
+Crocodile,T-Shirt,XXL,45.7,45.7,29.9,Regular,Garment
+Crocodile,T-Shirt,XXXL,47.2,47.2,30.7,Regular,Garment
 Cult,T-Shirt,S,39,39,27,Regular,Garment
 Cult,T-Shirt,M,41,41,27.5,Regular,Garment
 Cult,T-Shirt,L,43,43,28,Regular,Garment
@@ -139,17 +139,12 @@ Max Fashion,T-Shirt,M,38,38,,Regular,Body
 Max Fashion,T-Shirt,L,40,40,,Regular,Body
 Max Fashion,T-Shirt,XL,42,42,,Regular,Body
 Max Fashion,T-Shirt,XXL,44,44,,Regular,Body
-Monte Carlo,T-Shirt,36/S,40,40,26,Regular,Garment
-Monte Carlo,T-Shirt,38/M,42,42,27,Regular,Garment
-Monte Carlo,T-Shirt,40/L,44,44,28,Regular,Garment
-Monte Carlo,T-Shirt,42/XL,46,46,29,Regular,Garment
-Monte Carlo,T-Shirt,44/XXL,48,48,30,Regular,Garment
-Monte Carlo,T-Shirt,46/3XL,50,50,31,Regular,Garment
-H & M,T-Shirt,XXS-S,,,,Regular,Body
-H & M,T-Shirt,M-XL,46.5,48,24.5,Regular,Body
-H & M,T-Shirt,XXL-3XL,49.25,51.75,24.75,Regular,Body
-H & M,T-Shirt,XXL,,,,Regular,Body
-H & M,T-Shirt,3XL,,,,Regular,Body
+Monte Carlo,T-Shirt,S,40,40,26,Regular,Garment
+Monte Carlo,T-Shirt,M,42,42,27,Regular,Garment
+Monte Carlo,T-Shirt,L,44,44,28,Regular,Garment
+Monte Carlo,T-Shirt,XL,46,46,29,Regular,Garment
+Monte Carlo,T-Shirt,XXL,48,48,30,Regular,Garment
+Monte Carlo,T-Shirt,3XL,50,50,31,Regular,Garment
 Nobero,T-Shirt,S,38,38,26,Regular,Garment
 Nobero,T-Shirt,M,40,40,27,Regular,Garment
 Nobero,T-Shirt,L,42,42,28,Regular,Garment
@@ -248,6 +243,7 @@ Xyxx,T-Shirt,XXL,43,44,,Regular,Body
 Zara,T-Shirt,M,40.2,40.2,25.6,Regular,Garment
 Zara,T-Shirt,L,41,41,26.4,Regular,Garment
 Zara,T-Shirt,XL,41.8,41.8,27.2,Regular,Garment
+
 
 
 
