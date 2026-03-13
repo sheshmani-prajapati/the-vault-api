@@ -59,9 +59,9 @@ Flying Machine,T-Shirt,L,45,45,29,Regular,Garment
 Flying Machine,T-Shirt,XL,49,49,29,Regular,Garment
 Flying Machine,T-Shirt,XXL,51,51,30.5,Regular,Garment
 Flying Machine,T-Shirt,3XL,53,53,30.5,Regular,Garment
-H & M,T-Shirt,M,37,38.5,,Regular,Body
-H & M,T-Shirt,L,40.25,41.75,,Regular,Body
-H & M,T-Shirt,XL,43.25,44.75,,Regular,Body
+H&M,T-Shirt,M,37,38.5,,Regular,Body
+H&M,T-Shirt,L,40.25,41.75,,Regular,Body
+H&M,T-Shirt,XL,43.25,44.75,,Regular,Body
 HRX,T-Shirt,XS,40,40,26,Regular,Garment
 HRX,T-Shirt,S,38,38,26,Regular,Garment
 HRX,T-Shirt,M,40,40,27,Regular,Garment
@@ -105,11 +105,11 @@ Indian Terrain,T-Shirt,3XL,52.5,52.5,31.25,Slim,Garment
 Indian Terrain,T-Shirt,4XL,56,56,32,Slim,Garment
 Indian Terrain,T-Shirt,5XL,59.5,59.5,32.75,Slim,Garment
 Indian Terrain,T-Shirt,6XL,63,63,33.5,Slim,Garment
-Jack & Jones,T-Shirt,S,44.1,44.1,28,Oversized,Garment
-Jack & Jones,T-Shirt,M,45.7,45.7,28.6,Oversized,Garment
-Jack & Jones,T-Shirt,L,47.2,47.2,29.2,Oversized,Garment
-Jack & Jones,T-Shirt,XL,50.4,50.4,29.8,Oversized,Garment
-Jack & Jones,T-Shirt,XXL,53.5,53.5,30.4,Oversized,Garment
+Jack&Jones,T-Shirt,S,44.1,44.1,28,Oversized,Garment
+Jack&Jones,T-Shirt,M,45.7,45.7,28.6,Oversized,Garment
+Jack&Jones,T-Shirt,L,47.2,47.2,29.2,Oversized,Garment
+Jack&Jones,T-Shirt,XL,50.4,50.4,29.8,Oversized,Garment
+Jack&Jones,T-Shirt,XXL,53.5,53.5,30.4,Oversized,Garment
 Jockey,T-Shirt,S,31,33,,Regular,Body
 Jockey,T-Shirt,M,35,37,,Regular,Body
 Jockey,T-Shirt,L,39,41,,Regular,Body
@@ -243,6 +243,7 @@ Xyxx,T-Shirt,XXL,43,44,,Regular,Body
 Zara,T-Shirt,M,40.2,40.2,25.6,Regular,Garment
 Zara,T-Shirt,L,41,41,26.4,Regular,Garment
 Zara,T-Shirt,XL,41.8,41.8,27.2,Regular,Garment
+
 
 
 
