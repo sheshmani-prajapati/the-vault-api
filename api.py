@@ -51,7 +51,7 @@ def check_fit(ref_brand: str, ref_size: str, target_brand: str):
     ref_true_inches = (min_chest + max_chest) / 2
     ref_fit_type = ref_data['Fit Type'].strip().lower()
 
-    # 2. FIND THE TARGET
+   # 2. FIND THE TARGET
     best_match = None
     smallest_diff = 999
 
@@ -62,10 +62,20 @@ def check_fit(ref_brand: str, ref_size: str, target_brand: str):
             if t_min is None or t_max is None: continue
             
             target_true_inches = (t_min + t_max) / 2
-            diff = abs(ref_true_inches - target_true_inches)
+            
+            # Find the actual difference (Target minus Anchor)
+            raw_diff = target_true_inches - ref_true_inches
+            
+            # THE TIGHTNESS PENALTY 
+            # If the target shirt is smaller than the anchor, multiply the difference by 2.5
+            # This heavily biases the algorithm to recommend the slightly larger size.
+            if raw_diff < 0:
+                weighted_diff = abs(raw_diff) * 2.5 
+            else:
+                weighted_diff = raw_diff
 
-            if diff < smallest_diff:
-                smallest_diff = diff
+            if weighted_diff < smallest_diff:
+                smallest_diff = weighted_diff
                 best_match = row
 
     if not best_match:
@@ -86,4 +96,5 @@ def check_fit(ref_brand: str, ref_size: str, target_brand: str):
         "target_brand": target_brand.capitalize(),
         "recommended_size": best_match['Size Label'].upper(),
         "warning": warning_message
+
     }
