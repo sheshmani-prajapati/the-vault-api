@@ -126,24 +126,29 @@ def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str):
             detail=f"{target_brand.title()} does not manufacture a size large enough to match your {ref_brand.title()} {ref_size}."
         )
 
-    # 4. THE VIBE WARNING
+    # 4. THE CONSUMER-FRIENDLY WARNING
     target_fit_type = safe_str(best_match.get('Fit Type')).lower()
-    warning_message = "Perfect Match: Chest and intended style align beautifully."
+    warning_message = "✨ Perfect Fit: The chest and style match your usual size beautifully."
 
     t_shoulder_val = safe_float(best_match.get('Shoulder (Inches)'))
     
     if ref_shoulder and t_shoulder_val:
         s_diff = t_shoulder_val - ref_shoulder
         if s_diff > 2.0:
-            warning_message = f"VIBE SHIFT: Matches your chest width, but has a heavily dropped shoulder ({t_shoulder_val}\" vs your usual {ref_shoulder}\"). It will look much baggier."
+            warning_message = f"👕 Style Note: This fits your chest, but features a trendy drop-shoulder. It will look intentionally baggier than your {ref_brand.title()} tee."
         elif s_diff < -1.0:
-            warning_message = f"VIBE SHIFT: Matches chest, but the shoulders run quite narrow. Might feel restrictive."
+            warning_message = f"⚠️ Style Note: This fits your chest, but the shoulders are cut narrower. It might feel slightly snug."
         elif ref_fit_type in ["regular", "slim"] and target_fit_type in ["oversized", "boxy", "loose", "relaxed"]:
-            warning_message = f"VIBE SHIFT: Matches chest, but {target_brand.title()} designed this to be intentionally loose/boxy."
+            warning_message = f"👕 Style Note: This fits your chest, but {target_brand.title()} cuts this specific shirt to be intentionally oversized."
     elif ref_fit_type in ["regular", "slim"] and target_fit_type in ["oversized", "boxy", "loose", "relaxed"]:
-        warning_message = f"VIBE SHIFT: Matches chest width, but {target_brand.title()} designed this to be baggy."
+        warning_message = f"👕 Style Note: This fits your chest, but {target_brand.title()} designed this to be a baggy fit."
     elif ref_fit_type in ["oversized", "boxy", "loose", "relaxed"] and target_fit_type in ["slim", "regular"]:
-        warning_message = f"VIBE SHIFT: Matches measurements, but is a slimmer cut. It will hug your body tighter."
+        warning_message = f"⚠️ Style Note: This matches your measurements, but it's a slimmer cut. It will hug your body tighter than you are used to."
+
+    # Consumer-Friendly Fallback Note
+    if not exact_fit_found:
+        fallback_label = safe_str(ref_data.get('Fit Type')).title()
+        warning_message = f"💡 We based this on your {ref_brand.title()} ({fallback_label}) size. " + warning_message
 
     return {
         "status": "success",
