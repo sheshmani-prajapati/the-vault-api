@@ -2,10 +2,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import csv
 
-# Initialize the API
-app = FastAPI(title="The Vault API")
+app = FastAPI(title="The Vault API - v2 (Two-Factor Sizing)")
 
-# S.L.I.P. Framework: CORS allows any Shopify site to securely talk to your API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -30,10 +28,9 @@ def load_database():
 def safe_float(value):
     try:
         return float(value)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, AttributeError):
         return None
 
-# The Web Endpoint
 @app.get("/get_fit")
 def check_fit(ref_brand: str, ref_size: str, target_brand: str):
     db = load_database()
@@ -46,55 +43,81 @@ def check_fit(ref_brand: str, ref_size: str, target_brand: str):
     if not ref_data:
         raise HTTPException(status_code=404, detail="Anchor size not found")
 
-    min_chest = safe_float(ref_data['Chest Min (Inches)'])
-    max_chest = safe_float(ref_data['Chest Max (Inches)'])
+    min_chest = safe_float(ref_data.get('Chest Min (Inches)'))
+    max_chest = safe_float(ref_data.get('Chest Max (Inches)'))
+    if min_chest is None or max_chest is None:
+        raise HTTPException(status_code=400, detail="Anchor chest data missing")
+        
     ref_true_inches = (min_chest + max_chest) / 2
-    ref_fit_type = ref_data['Fit Type'].strip().lower()
+    ref_fit_type = ref_data.get('Fit Type', '').strip().lower()
+    ref_shoulder = safe_float(ref_data.get('Shoulder (Inches)'))
 
-   # 2. FIND THE TARGET
+    # 2. FIND THE TARGET (TWO-FACTOR MATCH)
     best_match = None
-    smallest_diff = 999
+    smallest_penalty_score = 9999
 
     for row in db:
         if row['Brand'].lower() == target_brand.lower():
-            t_min = safe_float(row['Chest Min (Inches)'])
-            t_max = safe_float(row['Chest Max (Inches)'])
+            t_min = safe_float(row.get('Chest Min (Inches)'))
+            t_max = safe_float(row.get('Chest Max (Inches)'))
             if t_min is None or t_max is None: continue
             
             target_true_inches = (t_min + t_max) / 2
+            target_shoulder = safe_float(row.get('Shoulder (Inches)'))
             
-            # Find the actual difference (Target minus Anchor)
-            raw_diff = target_true_inches - ref_true_inches
+            # FACTOR 1: CHEST DIFFERENCE
+            chest_diff = target_true_inches - ref_true_inches
             
-            # THE TIGHTNESS PENALTY 
-            # If the target shirt is smaller than the anchor, multiply the difference by 2.5
-            # This heavily biases the algorithm to recommend the slightly larger size.
-            if raw_diff < 0:
-                weighted_diff = abs(raw_diff) * 2.5 
+            # THE TIGHTNESS PENALTY (Chest)
+            if chest_diff < 0:
+                chest_score = abs(chest_diff) * 3.0 # Heavy penalty for tight chest
             else:
-                weighted_diff = raw_diff
+                chest_score = chest_diff
 
-            if weighted_diff < smallest_diff:
-                smallest_diff = weighted_diff
+            # FACTOR 2: SHOULDER DIFFERENCE (If both exist)
+            shoulder_score = 0
+            if ref_shoulder is not None and target_shoulder is not None:
+                shoulder_diff = target_shoulder - ref_shoulder
+                if shoulder_diff < -0.5: 
+                    # Heavy penalty if shoulders are noticeably tighter
+                    shoulder_score = abs(shoulder_diff) * 2.0
+                else:
+                    # Small acceptable penalty for being wider
+                    shoulder_score = abs(shoulder_diff) * 0.5 
+            
+            # TOTAL PENALTY SCORE
+            total_score = chest_score + shoulder_score
+
+            if total_score < smallest_penalty_score:
+                smallest_penalty_score = total_score
                 best_match = row
 
     if not best_match:
         raise HTTPException(status_code=404, detail="Target brand not found")
 
-    # 3. FIT VIBE LOGIC
-    target_fit_type = best_match['Fit Type'].strip().lower()
-    warning_message = "Perfect Match: Size and intended style align beautifully."
+    # 3. FIT VIBE LOGIC (Upgraded with Shoulder Context)
+    target_fit_type = best_match.get('Fit Type', '').strip().lower()
+    warning_message = "Perfect Match: Chest and intended style align beautifully."
 
-    if ref_fit_type in ["regular", "slim"] and target_fit_type in ["oversized", "boxy", "loose"]:
-        warning_message = f"VIBE SHIFT: Matches chest width, but {target_brand.capitalize()} designed this to be baggy. It will feel looser than your {ref_brand.capitalize()}."
+    t_shoulder_val = safe_float(best_match.get('Shoulder (Inches)'))
+    
+    if ref_shoulder and t_shoulder_val:
+        s_diff = t_shoulder_val - ref_shoulder
+        if s_diff > 2.0:
+            warning_message = f"VIBE SHIFT: Matches your chest width, but has a heavily dropped shoulder ({t_shoulder_val}\" vs your usual {ref_shoulder}\"). It will look much baggier."
+        elif s_diff < -1.0:
+            warning_message = f"VIBE SHIFT: Matches chest, but the shoulders run quite narrow. Might feel slightly restrictive."
+        elif ref_fit_type in ["regular", "slim"] and target_fit_type in ["oversized", "boxy", "loose"]:
+            warning_message = f"VIBE SHIFT: Matches chest, but {target_brand.title()} designed this to be intentionally loose/boxy."
+    elif ref_fit_type in ["regular", "slim"] and target_fit_type in ["oversized", "boxy", "loose"]:
+        warning_message = f"VIBE SHIFT: Matches chest width, but {target_brand.title()} designed this to be baggy. It will feel looser than your {ref_brand.title()}."
     elif ref_fit_type in ["oversized", "boxy", "loose"] and target_fit_type in ["slim", "regular"]:
-        warning_message = f"VIBE SHIFT: Matches measurements, but is a slimmer cut. It will hug your body tighter than your {ref_brand.capitalize()}."
+        warning_message = f"VIBE SHIFT: Matches measurements, but is a slimmer cut. It will hug your body tighter than your {ref_brand.title()}."
 
     # 4. SEND RESPONSE TO WIDGET
     return {
         "status": "success",
-        "target_brand": target_brand.capitalize(),
+        "target_brand": target_brand.title(),
         "recommended_size": best_match['Size Label'].upper(),
         "warning": warning_message
-
     }
