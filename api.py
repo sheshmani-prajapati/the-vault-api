@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import csv
 
-app = FastAPI(title="The Vault API - v2.1 (Sterilized)")
+app = FastAPI(title="The Vault API - v3 (Tri-Factor Matching)")
 
 app.add_middleware(
     CORSMiddleware,
@@ -19,7 +19,7 @@ def safe_float(value):
         return None
 
 @app.get("/get_fit")
-def check_fit(ref_brand: str, ref_size: str, target_brand: str):
+def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str):
     db = []
     try:
         with open("vault_tshirt_database.csv", mode='r', encoding='utf-8') as file:
@@ -32,15 +32,20 @@ def check_fit(ref_brand: str, ref_size: str, target_brand: str):
     if not db:
         raise HTTPException(status_code=500, detail="Database offline or missing.")
 
-    # 1. FIND THE ANCHOR
+    # 1. FIND THE ANCHOR (NOW REQUIRES BRAND + SIZE + FIT)
     ref_data = None
     for row in db:
-        if row.get('Brand', '').strip().lower() == ref_brand.lower() and row.get('Size Label', '').strip().upper() == ref_size.upper():
+        brand_match = row.get('Brand', '').strip().lower() == ref_brand.lower()
+        size_match = row.get('Size Label', '').strip().upper() == ref_size.upper()
+        # New Match Logic for Fit Type
+        fit_match = row.get('Fit Type', '').strip().lower() == ref_fit.lower()
+        
+        if brand_match and size_match and fit_match:
             ref_data = row
             break
             
     if not ref_data:
-        raise HTTPException(status_code=404, detail="Anchor size not found in database.")
+        raise HTTPException(status_code=404, detail=f"We don't have the data for {ref_brand.title()} {ref_fit.title()} {ref_size.upper()} yet.")
 
     min_chest = safe_float(ref_data.get('Chest Min (Inches)'))
     max_chest = safe_float(ref_data.get('Chest Max (Inches)'))
@@ -67,7 +72,6 @@ def check_fit(ref_brand: str, ref_size: str, target_brand: str):
             
             chest_diff = target_true_inches - ref_true_inches
             
-            # The Asymmetric Penalty Math
             if chest_diff < 0:
                 chest_score = abs(chest_diff) * 3.0 
             else:
@@ -115,11 +119,11 @@ def check_fit(ref_brand: str, ref_size: str, target_brand: str):
             warning_message = f"VIBE SHIFT: Matches your chest width, but has a heavily dropped shoulder ({t_shoulder_val}\" vs your usual {ref_shoulder}\"). It will look much baggier."
         elif s_diff < -1.0:
             warning_message = f"VIBE SHIFT: Matches chest, but the shoulders run quite narrow. Might feel restrictive."
-        elif ref_fit_type in ["regular", "slim"] and target_fit_type in ["oversized", "boxy", "loose"]:
+        elif ref_fit_type in ["regular", "slim"] and target_fit_type in ["oversized", "boxy", "loose", "relaxed"]:
             warning_message = f"VIBE SHIFT: Matches chest, but {target_brand.title()} designed this to be intentionally loose/boxy."
-    elif ref_fit_type in ["regular", "slim"] and target_fit_type in ["oversized", "boxy", "loose"]:
+    elif ref_fit_type in ["regular", "slim"] and target_fit_type in ["oversized", "boxy", "loose", "relaxed"]:
         warning_message = f"VIBE SHIFT: Matches chest width, but {target_brand.title()} designed this to be baggy."
-    elif ref_fit_type in ["oversized", "boxy", "loose"] and target_fit_type in ["slim", "regular"]:
+    elif ref_fit_type in ["oversized", "boxy", "loose", "relaxed"] and target_fit_type in ["slim", "regular"]:
         warning_message = f"VIBE SHIFT: Matches measurements, but is a slimmer cut. It will hug your body tighter."
 
     return {
