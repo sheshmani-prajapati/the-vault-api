@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import csv
 
-app = FastAPI(title="The Vault API - v3 (Tri-Factor Matching)")
+app = FastAPI(title="The Vault API - v3.1 (Bulletproof)")
 
 app.add_middleware(
     CORSMiddleware,
@@ -18,6 +18,12 @@ def safe_float(value):
     except (ValueError, TypeError, AttributeError):
         return None
 
+# THE NEW DATA SHIELD
+def safe_str(value):
+    if value is None:
+        return ""
+    return str(value).strip()
+
 @app.get("/get_fit")
 def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str):
     db = []
@@ -32,20 +38,19 @@ def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str):
     if not db:
         raise HTTPException(status_code=500, detail="Database offline or missing.")
 
-    # 1. FIND THE ANCHOR (NOW REQUIRES BRAND + SIZE + FIT)
+    # 1. FIND THE ANCHOR
     ref_data = None
     for row in db:
-        brand_match = row.get('Brand', '').strip().lower() == ref_brand.lower()
-        size_match = row.get('Size Label', '').strip().upper() == ref_size.upper()
-        # New Match Logic for Fit Type
-        fit_match = row.get('Fit Type', '').strip().lower() == ref_fit.lower()
+        brand_match = safe_str(row.get('Brand')).lower() == ref_brand.lower()
+        size_match = safe_str(row.get('Size Label')).upper() == ref_size.upper()
+        fit_match = safe_str(row.get('Fit Type')).lower() == ref_fit.lower()
         
         if brand_match and size_match and fit_match:
             ref_data = row
             break
             
     if not ref_data:
-        raise HTTPException(status_code=404, detail=f"We don't have the data for {ref_brand.title()} {ref_fit.title()} {ref_size.upper()} yet.")
+        raise HTTPException(status_code=404, detail=f"We don't have the exact data for {ref_brand.title()} {ref_fit.title()} {ref_size.upper()} yet.")
 
     min_chest = safe_float(ref_data.get('Chest Min (Inches)'))
     max_chest = safe_float(ref_data.get('Chest Max (Inches)'))
@@ -53,7 +58,7 @@ def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str):
         raise HTTPException(status_code=400, detail="Anchor chest data missing in CSV.")
         
     ref_true_inches = (min_chest + max_chest) / 2
-    ref_fit_type = ref_data.get('Fit Type', '').strip().lower()
+    ref_fit_type = safe_str(ref_data.get('Fit Type')).lower()
     ref_shoulder = safe_float(ref_data.get('Shoulder (Inches)'))
 
     # 2. FIND THE TARGET
@@ -61,7 +66,7 @@ def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str):
     smallest_penalty_score = 9999
 
     for row in db:
-        if row.get('Brand', '').strip().lower() == target_brand.lower():
+        if safe_str(row.get('Brand')).lower() == target_brand.lower():
             t_min = safe_float(row.get('Chest Min (Inches)'))
             t_max = safe_float(row.get('Chest Max (Inches)'))
             if t_min is None or t_max is None: 
@@ -108,7 +113,7 @@ def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str):
         )
 
     # 4. THE VIBE WARNING
-    target_fit_type = best_match.get('Fit Type', '').strip().lower()
+    target_fit_type = safe_str(best_match.get('Fit Type')).lower()
     warning_message = "Perfect Match: Chest and intended style align beautifully."
 
     t_shoulder_val = safe_float(best_match.get('Shoulder (Inches)'))
@@ -129,6 +134,6 @@ def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str):
     return {
         "status": "success",
         "target_brand": target_brand.title(),
-        "recommended_size": best_match.get('Size Label', '').strip().upper(),
+        "recommended_size": safe_str(best_match.get('Size Label')).upper(),
         "warning": warning_message
     }
