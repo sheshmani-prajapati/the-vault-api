@@ -46,12 +46,12 @@ Crazymonk,T-Shirt,M,42,,28.5,20,Oversized,Garment
 Crazymonk,T-Shirt,L,44,,29.5,21,Oversized,Garment
 Crazymonk,T-Shirt,XL,46,,30,22,Oversized,Garment
 Crazymonk,T-Shirt,XXL,48,,30.5,23,Oversized,Garment
-Crimsoune Club,T-Shirt,S,38,38,25,16,Oversize,Garment
-Crimsoune Club,T-Shirt,M,40,40,27,17,Oversize,Garment
-Crimsoune Club,T-Shirt,L,42,42,28,18,Oversize,Garment
-Crimsoune Club,T-Shirt,XL,44,44,28.5,29,Oversize,Garment
-Crimsoune Club,T-Shirt,XXL,46,46,30,20,Oversize,Garment
-Crimsoune Club,T-Shirt,XXXL,48,48,31,21,Oversize,Garment
+Crimsoune Club,T-Shirt,S,38,38,25,16,Oversized,Garment
+Crimsoune Club,T-Shirt,M,40,40,27,17,Oversized,Garment
+Crimsoune Club,T-Shirt,L,42,42,28,18,Oversized,Garment
+Crimsoune Club,T-Shirt,XL,44,44,28.5,29,Oversized,Garment
+Crimsoune Club,T-Shirt,XXL,46,46,30,20,Oversized,Garment
+Crimsoune Club,T-Shirt,XXXL,48,48,31,21,Oversized,Garment
 Crocodile,T-Shirt,S,39.4,39.4,27.2,16.3,Regular,Garment
 Crocodile,T-Shirt,M,40.9,40.9,27.6,16.9,Regular,Garment
 Crocodile,T-Shirt,L,42.5,42.5,28.3,17.7,Regular,Garment
@@ -98,15 +98,15 @@ Indian Terrain,T-Shirt,XXXL,53.5,53.5,31.25,20.38,Regular,Garment
 Indian Terrain,T-Shirt,XXXXL,57,57,32,21.13,Regular,Garment
 Indian Terrain,T-Shirt,XXXXXL,60.5,60.5,32.75,21.88,Regular,Garment
 Indian Terrain,T-Shirt,XXXXXXL,64,64,33.5,22.63,Regular,Garment
-Indian Terrain,T-Shirt,S,38.5,38.5,26,16.38,Crew Neck,Garment
-Indian Terrain,T-Shirt,M,41,41,27,17.13,Crew Neck,Garment
-Indian Terrain,T-Shirt,L,43.5,43.5,28,17.88,Crew Neck,Garment
-Indian Terrain,T-Shirt,XL,46,46,29,18.88,Crew Neck,Garment
-Indian Terrain,T-Shirt,XXL,48.5,48.5,30,19.63,Crew Neck,Garment
-Indian Terrain,T-Shirt,XXXL,51,51,30.75,20.38,Crew Neck,Garment
-Indian Terrain,T-Shirt,XXXXL,53.5,53.5,31.5,21.13,Crew Neck,Garment
-Indian Terrain,T-Shirt,XXXXXL,56,56,32.25,21.88,Crew Neck,Garment
-Indian Terrain,T-Shirt,XXXXXXL,58.5,58.5,33,22.63,Crew Neck,Garment
+Indian Terrain,T-Shirt,S,38.5,38.5,26,16.38,Regular,Garment
+Indian Terrain,T-Shirt,M,41,41,27,17.13,Regular,Garment
+Indian Terrain,T-Shirt,L,43.5,43.5,28,17.88,Regular,Garment
+Indian Terrain,T-Shirt,XL,46,46,29,18.88,Regular,Garment
+Indian Terrain,T-Shirt,XXL,48.5,48.5,30,19.63,Regular,Garment
+Indian Terrain,T-Shirt,XXXL,51,51,30.75,20.38,Regular,Garment
+Indian Terrain,T-Shirt,XXXXL,53.5,53.5,31.5,21.13,Regular,Garment
+Indian Terrain,T-Shirt,XXXXXL,56,56,32.25,21.88,Regular,Garment
+Indian Terrain,T-Shirt,XXXXXXL,58.5,58.5,33,22.63,Regular,Garment
 Indian Terrain,T-Shirt,S,43,43,26.69,22.25,Relaxed,Garment
 Indian Terrain,T-Shirt,M,45.67,45.67,27.48,22.99,Relaxed,Garment
 Indian Terrain,T-Shirt,L,48.27,48.27,28.27,23.75,Relaxed,Garment
@@ -136,12 +136,12 @@ Levis,T-Shirt,M,41,41,28,18,Slim,Garment
 Levis,T-Shirt,L,43.5,43.5,28.75,19,Slim,Garment
 Levis,T-Shirt,XL,46,46,29.5,20,Slim,Garment
 Levis,T-Shirt,XXL,48.5,48.5,30.25,21,Slim,Garment
-Levis,T-Shirt,XS,38.5,38.5,26,16.25,Crew Neck,Garment
-Levis,T-Shirt,S,41,41,27,17.25,Crew Neck,Garment
-Levis,T-Shirt,M,43.5,43.5,28,18.25,Crew Neck,Garment
-Levis,T-Shirt,L,46,46,29,19.25,Crew Neck,Garment
-Levis,T-Shirt,XL,48.5,48.5,30,20.25,Crew Neck,Garment
-Levis,T-Shirt,XXL,51,51,31,21.25,Crew Neck,Garment
+Levis,T-Shirt,XS,38.5,38.5,26,16.25,Regular,Garment
+Levis,T-Shirt,S,41,41,27,17.25,Crew Regular,Garment
+Levis,T-Shirt,M,43.5,43.5,28,18.25,Regular,Garment
+Levis,T-Shirt,L,46,46,29,19.25,Regular,Garment
+Levis,T-Shirt,XL,48.5,48.5,30,20.25,Regular,Garment
+Levis,T-Shirt,XXL,51,51,31,21.25,Regular,Garment
 Levis,T-Shirt,XS,43,43,26,19,Oversized,Garment
 Levis,T-Shirt,S,45.5,45.5,27,20,Oversized,Garment
 Levis,T-Shirt,M,48,48,28,21,Oversized,Garment
