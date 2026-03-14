@@ -40,6 +40,9 @@ def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str):
 
     # 1. FIND THE ANCHOR
     ref_data = None
+    exact_fit_found = True
+    
+    # PASS 1: Try for the perfect strict match (Brand + Size + Fit)
     for row in db:
         brand_match = safe_str(row.get('Brand')).lower() == ref_brand.lower()
         size_match = safe_str(row.get('Size Label')).upper() == ref_size.upper()
@@ -49,8 +52,19 @@ def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str):
             ref_data = row
             break
             
+    # PASS 2: The Graceful Fallback (If exact fit doesn't exist, grab whatever fit they DO have)
     if not ref_data:
-        raise HTTPException(status_code=404, detail=f"We don't have the exact data for {ref_brand.title()} {ref_fit.title()} {ref_size.upper()} yet.")
+        for row in db:
+            brand_match = safe_str(row.get('Brand')).lower() == ref_brand.lower()
+            size_match = safe_str(row.get('Size Label')).upper() == ref_size.upper()
+            
+            if brand_match and size_match:
+                ref_data = row
+                exact_fit_found = False
+                break
+                
+    if not ref_data:
+        raise HTTPException(status_code=404, detail=f"We don't have the exact data for {ref_brand.title()} {ref_size.upper()} yet.")
 
     min_chest = safe_float(ref_data.get('Chest Min (Inches)'))
     max_chest = safe_float(ref_data.get('Chest Max (Inches)'))
@@ -60,7 +74,7 @@ def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str):
     ref_true_inches = (min_chest + max_chest) / 2
     ref_fit_type = safe_str(ref_data.get('Fit Type')).lower()
     ref_shoulder = safe_float(ref_data.get('Shoulder (Inches)'))
-
+    
     # 2. FIND THE TARGET
     best_match = None
     smallest_penalty_score = 9999
