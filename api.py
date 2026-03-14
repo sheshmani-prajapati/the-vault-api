@@ -151,3 +151,31 @@ def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str):
         "recommended_size": safe_str(best_match.get('Size Label')).upper(),
         "warning": warning_message
     }
+# ==========================================
+# 🌐 THE META ENDPOINT (For Cascading Dropdowns)
+# ==========================================
+@app.get("/meta")
+def get_metadata():
+    brand_data = {}
+    try:
+        with open("vault_tshirt_database.csv", mode='r', encoding='utf-8') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                brand = safe_str(row.get('Brand')).title()
+                fit = safe_str(row.get('Fit Type')).title()
+                size = safe_str(row.get('Size Label')).upper()
+                
+                if not brand or not fit or not size:
+                    continue
+                    
+                # Build the nested dictionary: Brand -> Fit -> [Sizes]
+                if brand not in brand_data:
+                    brand_data[brand] = {}
+                if fit not in brand_data[brand]:
+                    brand_data[brand][fit] = []
+                if size not in brand_data[brand][fit]:
+                    brand_data[brand][fit].append(size)
+    except FileNotFoundError:
+        pass
+        
+    return brand_data
