@@ -95,6 +95,26 @@ def check_fit(ref_brand: str, ref_size: str, target_brand: str):
     if not best_match:
         raise HTTPException(status_code=404, detail="Target brand not found")
 
+  if not best_match:
+        raise HTTPException(status_code=404, detail="Target brand not found")
+
+    # ==========================================
+    # 🛑 THE DEALBREAKER CLAUSE
+    # Check if the "best" match is still physically unwearable.
+    # ==========================================
+    winner_t_min = safe_float(best_match.get('Chest Min (Inches)'))
+    winner_t_max = safe_float(best_match.get('Chest Max (Inches)'))
+    winner_target_inches = (winner_t_min + winner_t_max) / 2
+    
+    final_chest_diff = winner_target_inches - ref_true_inches
+    
+    # If the absolute largest shirt the target brand makes is still >1.5 inches too tight...
+    if final_chest_diff < -1.5:
+        raise HTTPException(
+            status_code=406, 
+            detail=f"{target_brand.title()} does not manufacture a size large enough to match your {ref_brand.title()} {ref_size}."
+        )
+    # ==========================================
     # 3. FIT VIBE LOGIC (Upgraded with Shoulder Context)
     target_fit_type = best_match.get('Fit Type', '').strip().lower()
     warning_message = "Perfect Match: Chest and intended style align beautifully."
