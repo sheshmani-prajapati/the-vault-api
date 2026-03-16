@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import csv
 
-app = FastAPI(title="The Vault API - v3.1 (Bulletproof)")
+app = FastAPI(title="The Vault API - v3.2 (Normalization Shield)")
 
 app.add_middleware(
     CORSMiddleware,
@@ -18,17 +18,28 @@ def safe_float(value):
     except (ValueError, TypeError, AttributeError):
         return None
 
-# THE NEW DATA SHIELD
 def safe_str(value):
     if value is None:
         return ""
     return str(value).strip()
 
+# THE NEW NORMALIZATION SHIELD
+def normalize_match(value):
+    if not value:
+        return ""
+    # Convert to string, lowercase, remove apostrophes, and strip edge spaces
+    val = str(value).lower().replace("'", "").strip()
+    # If the string ends with " fit", chop it off so "Regular Fit" becomes "regular"
+    if val.endswith(" fit"):
+        val = val[:-4].strip()
+    return val
+
 @app.get("/get_fit")
 def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str, target_fit: str = "Regular Fit"):
     db = []
     try:
-        with open("vault_tshirt_database.csv", mode='r', encoding='utf-8') as file:
+        # utf-8-sig automatically strips invisible Excel BOM characters that break matching
+        with open("vault_tshirt_database.csv", mode='r', encoding='utf-8-sig') as file:
             reader = csv.DictReader(file)
             for row in reader:
                 db.append(row)
@@ -38,27 +49,30 @@ def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str, ta
     if not db:
         raise HTTPException(status_code=500, detail="Database offline or missing.")
 
+    # Normalize incoming URL parameters once for the whole function
+    norm_ref_brand = normalize_match(ref_brand)
+    norm_ref_fit = normalize_match(ref_fit)
+    norm_target_brand = normalize_match(target_brand)
+    norm_target_fit = normalize_match(target_fit)
+    norm_ref_size = safe_str(ref_size).upper()
+
     # 1. FIND THE ANCHOR
     ref_data = None
     exact_fit_found = True
     
-    # PASS 1: Try for the perfect strict match (Brand + Size + Fit)
+    # PASS 1: Strict match using Normalized Strings
     for row in db:
-        brand_match = safe_str(row.get('Brand')).lower() == ref_brand.lower()
-        size_match = safe_str(row.get('Size Label')).upper() == ref_size.upper()
-        fit_match = safe_str(row.get('Fit Type')).lower() == ref_fit.lower()
-        
-        if brand_match and size_match and fit_match:
+        if (normalize_match(row.get('Brand')) == norm_ref_brand and 
+            safe_str(row.get('Size Label')).upper() == norm_ref_size and 
+            normalize_match(row.get('Fit Type')) == norm_ref_fit):
             ref_data = row
             break
             
-    # PASS 2: The Graceful Fallback (If exact fit doesn't exist, grab whatever fit they DO have)
+    # PASS 2: The Graceful Fallback
     if not ref_data:
         for row in db:
-            brand_match = safe_str(row.get('Brand')).lower() == ref_brand.lower()
-            size_match = safe_str(row.get('Size Label')).upper() == ref_size.upper()
-            
-            if brand_match and size_match:
+            if (normalize_match(row.get('Brand')) == norm_ref_brand and 
+                safe_str(row.get('Size Label')).upper() == norm_ref_size):
                 ref_data = row
                 exact_fit_found = False
                 break
@@ -80,13 +94,14 @@ def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str, ta
     smallest_penalty_score = 9999
 
     for row in db:
-        # THE FIX: Check that BOTH the target brand AND the target fit match
-        t_brand_match = safe_str(row.get('Brand')).lower() == target_brand.lower()
-        t_fit_match = safe_str(row.get('Fit Type')).lower() == target_fit.lower()
+        t_brand_match = normalize_match(row.get('Brand')) == norm_target_brand
+        t_fit_match = normalize_match(row.get('Fit Type')) == norm_target_fit
 
         if t_brand_match and t_fit_match:
             t_min = safe_float(row.get('Chest Min (Inches)'))
             t_max = safe_float(row.get('Chest Max (Inches)'))
+            
+            # CRITICAL: If the CSV has blank values for Chest size, the engine skips it to avoid crashing
             if t_min is None or t_max is None: 
                 continue
             
@@ -115,7 +130,7 @@ def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str, ta
                 best_match = row
 
     if not best_match:
-        raise HTTPException(status_code=404, detail=f"Could not find a {target_fit.title()} from {target_brand.title()} to match against.")
+        raise HTTPException(status_code=404, detail=f"Could not calculate sizes for {target_brand.title()} {target_fit.title()}. Ensure the CSV has Chest values for this brand/fit.")
 
     # 3. THE DEALBREAKER CLAUSE
     winner_t_min = safe_float(best_match.get('Chest Min (Inches)'))
@@ -160,6 +175,7 @@ def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str, ta
         "recommended_size": safe_str(best_match.get('Size Label')).upper(),
         "warning": warning_message
     }
+
 # ==========================================
 # 🌐 THE META ENDPOINT (For Cascading Dropdowns)
 # ==========================================
@@ -167,7 +183,7 @@ def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str, ta
 def get_metadata():
     brand_data = {}
     try:
-        with open("vault_tshirt_database.csv", mode='r', encoding='utf-8') as file:
+        with open("vault_tshirt_database.csv", mode='r', encoding='utf-8-sig') as file:
             reader = csv.DictReader(file)
             for row in reader:
                 brand = safe_str(row.get('Brand')).title()
@@ -177,7 +193,6 @@ def get_metadata():
                 if not brand or not fit or not size:
                     continue
                     
-                # Build the nested dictionary: Brand -> Fit -> [Sizes]
                 if brand not in brand_data:
                     brand_data[brand] = {}
                 if fit not in brand_data[brand]:
