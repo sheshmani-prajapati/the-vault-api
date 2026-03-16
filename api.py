@@ -25,7 +25,7 @@ def safe_str(value):
     return str(value).strip()
 
 @app.get("/get_fit")
-def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str):
+def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str, target_fit: str = "Regular Fit"):
     db = []
     try:
         with open("vault_tshirt_database.csv", mode='r', encoding='utf-8') as file:
@@ -80,7 +80,11 @@ def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str):
     smallest_penalty_score = 9999
 
     for row in db:
-        if safe_str(row.get('Brand')).lower() == target_brand.lower():
+        # THE FIX: Check that BOTH the target brand AND the target fit match
+        t_brand_match = safe_str(row.get('Brand')).lower() == target_brand.lower()
+        t_fit_match = safe_str(row.get('Fit Type')).lower() == target_fit.lower()
+
+        if t_brand_match and t_fit_match:
             t_min = safe_float(row.get('Chest Min (Inches)'))
             t_max = safe_float(row.get('Chest Max (Inches)'))
             if t_min is None or t_max is None: 
@@ -111,7 +115,7 @@ def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str):
                 best_match = row
 
     if not best_match:
-        raise HTTPException(status_code=404, detail="Target brand not found in database.")
+        raise HTTPException(status_code=404, detail=f"Could not find a {target_fit.title()} from {target_brand.title()} to match against.")
 
     # 3. THE DEALBREAKER CLAUSE
     winner_t_min = safe_float(best_match.get('Chest Min (Inches)'))
