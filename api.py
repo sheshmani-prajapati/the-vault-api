@@ -1,10 +1,13 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import Optional
+from supabase import create_client, Client
 import csv
 import os
 import traceback
 
-app = FastAPI(title="The Vault API - v3.3 (Diagnostic Shield)")
+app = FastAPI(title="The Vault API - v3.4 (With Tracking)")
 
 app.add_middleware(
     CORSMiddleware,
@@ -14,6 +17,50 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- SUPABASE DATABASE SETUP ---
+# We use environment variables so your API keys aren't exposed in Github
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+supabase: Client | None = None
+if SUPABASE_URL and SUPABASE_KEY:
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    except Exception as e:
+        print("Failed to initialize Supabase:", str(e))
+
+# --- TRACKING DATA MODEL ---
+class TrackingPayload(BaseModel):
+    event: str
+    product_id: Optional[str] = None
+    brand: Optional[str] = None
+    result: Optional[str] = None
+
+# --- NEW TRACKING ENDPOINT ---
+@app.post("/track_event")
+async def track_event(payload: TrackingPayload):
+    if not supabase:
+        print("Warning: Event received but Supabase is not connected.")
+        return {"status": "error", "message": "Database not configured"}
+        
+    try:
+        data_to_insert = {
+            "event_type": payload.event,
+            "product_id": payload.product_id,
+            "brand": payload.brand,
+            "result": payload.result
+        }
+        
+        # Push to your Supabase table
+        supabase.table("analytics_events").insert(data_to_insert).execute()
+        return {"status": "success", "recorded_event": payload.event}
+        
+    except Exception as e:
+        # We catch the error silently so it NEVER crashes the Shopify cart
+        print(f"Vault Tracking Error: {str(e)}")
+        return {"status": "error", "message": "Failed to log event"}
+
+# --- HELPER FUNCTIONS ---
 def safe_float(value):
     try:
         return float(value)
@@ -33,12 +80,13 @@ def normalize_match(value):
         val = val[:-4].strip()
     return val
 
+# --- EXISTING ENDPOINTS ---
 @app.get("/get_fit")
 def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str, target_fit: str = "Regular Fit"):
     try:
         db = []
         
-        # 1. SMART FILE LOCATOR (Fixes Linux Case-Sensitivity)
+        # 1. SMART FILE LOCATOR
         file_path = "vault_tshirt_database.csv"
         if not os.path.exists(file_path):
             for f in os.listdir("."):
@@ -49,7 +97,7 @@ def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str, ta
         if not os.path.exists(file_path):
             raise ValueError(f"Could not find the database file on Render.")
 
-        # 2. SAFE FILE READER (Fixes Encoding Crashes)
+        # 2. SAFE FILE READER
         try:
             with open(file_path, mode='r', encoding='utf-8-sig') as file:
                 reader = csv.DictReader(file)
@@ -184,10 +232,8 @@ def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str, ta
         }
 
     except Exception as e:
-        # This catches ANY Python crash and sends it directly to your widget safely
         print("CRASH LOG:", traceback.format_exc())
         raise HTTPException(status_code=400, detail=f"Engine Error: {str(e)}")
-
 
 @app.get("/meta")
 def get_metadata():
