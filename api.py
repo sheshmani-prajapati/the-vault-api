@@ -1,5 +1,7 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+import json
 from pydantic import BaseModel
 from typing import Optional
 from supabase import create_client, Client
@@ -275,3 +277,142 @@ def get_metadata():
         pass
         
     return brand_data
+    # --- B2B ANALYTICS DASHBOARD ---
+@app.get("/dashboard", response_class=HTMLResponse)
+async def b2b_dashboard(brand: str = "Snitch"):
+    if not supabase:
+        return "<h1>Dashboard Offline: Supabase not connected.</h1>"
+
+    try:
+        # 1. Fetch live data for this specific brand
+        res = supabase.table("tracking_events").select("*").eq("brand_name", brand).execute()
+        events = res.data
+
+        # 2. Crunch the metrics
+        funnel = {"widget_opened": 0, "size_calculated": 0, "add_to_cart_intent": 0, "purchase_completed": 0}
+        feedback = {"Perfect": 0, "Too Tight": 0, "Too Loose": 0, "Returned": 0}
+
+        for e in events:
+            evt = e.get("event_type")
+            res_text = e.get("result_text", "")
+            
+            if evt in funnel:
+                funnel[evt] += 1
+            
+            if evt == "verified_fit_feedback":
+                # Clean up the string "User reported: Perfect" -> "Perfect"
+                clean_feedback = res_text.replace("User reported: ", "").strip()
+                if clean_feedback in feedback:
+                    feedback[clean_feedback] += 1
+                else:
+                    feedback[clean_feedback] = 1
+
+        # Calculate ROI metric
+        conversion_rate = 0
+        if funnel["widget_opened"] > 0:
+            conversion_rate = round((funnel["purchase_completed"] / funnel["widget_opened"]) * 100, 1)
+
+        # 3. Build the interactive HTML/JS Page
+        html_content = f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>The Vault | Partner Dashboard</title>
+            <script src="https://cdn.tailwindcss.com"></script>
+            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+            <style> body {{ font-family: 'Inter', sans-serif; background-color: #f8fafc; }} </style>
+        </head>
+        <body class="text-slate-800 p-8">
+            <div class="max-w-6xl mx-auto">
+                <div class="flex justify-between items-end mb-8 border-b border-slate-200 pb-6">
+                    <div>
+                        <h1 class="text-3xl font-extrabold tracking-tight text-slate-900">Partner Intelligence</h1>
+                        <p class="text-slate-500 mt-1">Live Sizing & Conversion Data for <span class="font-bold text-blue-600">{brand}</span></p>
+                    </div>
+                    <div class="text-right">
+                        <span class="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">Live Connection Active</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+                        <h3 class="text-sm font-semibold text-slate-500 uppercase tracking-wider">Vault Opens</h3>
+                        <p class="text-4xl font-extrabold mt-2 text-slate-900">{funnel['widget_opened']}</p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+                        <h3 class="text-sm font-semibold text-slate-500 uppercase tracking-wider">Added to Bag (Vault Users)</h3>
+                        <p class="text-4xl font-extrabold mt-2 text-blue-600">{funnel['add_to_cart_intent']}</p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6 border-t-4 border-t-emerald-500">
+                        <h3 class="text-sm font-semibold text-slate-500 uppercase tracking-wider">Conversion Rate</h3>
+                        <p class="text-4xl font-extrabold mt-2 text-emerald-600">{conversion_rate}%</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                        <h3 class="text-lg font-bold mb-4">The Conversion Funnel</h3>
+                        <canvas id="funnelChart" height="200"></canvas>
+                    </div>
+                    
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                        <h3 class="text-lg font-bold mb-4">Post-Purchase Feedback (RTO Predictor)</h3>
+                        <div class="relative h-64">
+                            <canvas id="feedbackChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                // Funnel Chart
+                const funnelCtx = document.getElementById('funnelChart').getContext('2d');
+                new Chart(funnelCtx, {{
+                    type: 'bar',
+                    data: {{
+                        labels: ['Opened Widget', 'Calculated Size', 'Added to Bag', 'Completed Purchase'],
+                        datasets: [{{
+                            label: 'User Count',
+                            data: [{funnel['widget_opened']}, {funnel['size_calculated']}, {funnel['add_to_cart_intent']}, {funnel['purchase_completed']}],
+                            backgroundColor: ['#cbd5e1', '#94a3b8', '#3b82f6', '#10b981'],
+                            borderRadius: 6
+                        }}]
+                    }},
+                    options: {{
+                        plugins: {{ legend: {{ display: false }} }},
+                        scales: {{ y: {{ beginAtZero: true }} }}
+                    }}
+                }});
+
+                // Feedback Chart
+                const feedbackCtx = document.getElementById('feedbackChart').getContext('2d');
+                new Chart(feedbackCtx, {{
+                    type: 'doughnut',
+                    data: {{
+                        labels: ['Perfect Fit', 'Too Tight', 'Too Loose', 'Returned'],
+                        datasets: [{{
+                            data: [{feedback['Perfect']}, {feedback['Too Tight']}, {feedback['Too Loose']}, {feedback['Returned']}],
+                            backgroundColor: ['#10b981', '#f59e0b', '#3b82f6', '#ef4444'],
+                            borderWidth: 0,
+                            hoverOffset: 4
+                        }}]
+                    }},
+                    options: {{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {{
+                            legend: {{ position: 'bottom' }}
+                        }}
+                    }}
+                }});
+            </script>
+        </body>
+        </html>
+        """
+        return HTMLResponse(content=html_content, status_code=200)
+
+    except Exception as e:
+        return f"<h1>Error loading dashboard: {str(e)}</h1>"
