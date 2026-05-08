@@ -7,7 +7,7 @@ import csv
 import os
 import traceback
 
-app = FastAPI(title="The Vault API - v3.4 (With Tracking)")
+app = FastAPI(title="The Vault API - v3.5 (With Persistent Supabase)")
 
 app.add_middleware(
     CORSMiddleware,
@@ -26,8 +26,11 @@ supabase: Client | None = None
 if SUPABASE_URL and SUPABASE_KEY:
     try:
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        print("✅ Supabase successfully connected.")
     except Exception as e:
-        print("Failed to initialize Supabase:", str(e))
+        print("❌ Failed to initialize Supabase:", str(e))
+else:
+    print("⚠️ Warning: Supabase keys not found in environment variables.")
 
 # --- TRACKING DATA MODEL ---
 class TrackingPayload(BaseModel):
@@ -35,6 +38,7 @@ class TrackingPayload(BaseModel):
     product_id: Optional[str] = None
     brand: Optional[str] = None
     result: Optional[str] = None
+    uuid: Optional[str] = "anonymous" # Added the UUID from the Chrome Extension
 
 # --- NEW TRACKING ENDPOINT ---
 @app.post("/track_event")
@@ -44,15 +48,20 @@ async def track_event(payload: TrackingPayload):
         return {"status": "error", "message": "Database not configured"}
         
     try:
-        data_to_insert = {
+        # 1. Upsert the User (Creates them if they are new, ignores if they exist)
+        supabase.table("vault_users").upsert({
+            "uuid": payload.uuid
+        }).execute()
+
+        # 2. Log the exact action they took to the tracking table
+        supabase.table("tracking_events").insert({
+            "user_uuid": payload.uuid,
+            "brand_name": payload.brand or "Unknown Brand",
             "event_type": payload.event,
-            "product_id": payload.product_id,
-            "brand": payload.brand,
-            "result": payload.result
-        }
+            "product_id": payload.product_id or "N/A",
+            "result_text": payload.result or "N/A"
+        }).execute()
         
-        # Push to your Supabase table
-        supabase.table("analytics_events").insert(data_to_insert).execute()
         return {"status": "success", "recorded_event": payload.event}
         
     except Exception as e:
