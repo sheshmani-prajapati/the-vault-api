@@ -285,7 +285,7 @@ async def b2b_dashboard(brand: str = "Snitch"):
 
     try:
         # 1. Fetch live data for this specific brand
-        res = supabase.table("tracking_events").select("*").eq("brand_name", brand).execute()
+        res = supabase.table("tracking_events").select("*").ilike("brand_name", brand).execute()
         events = res.data
 
         # 2. Crunch the metrics
