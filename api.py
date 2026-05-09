@@ -319,9 +319,20 @@ async def b2b_dashboard(brand: str = "Snitch"):
         return "<h1>Dashboard Offline: Supabase not connected.</h1>"
 
     try:
-        # 1. Fetch live data for this specific brand
-        res = supabase.table("tracking_events").select("*").ilike("brand_name", brand).execute()
-        events = res.data
+        # 1. Fetch records to do smart filtering in Python
+        res = supabase.table("tracking_events").select("*").limit(10000).execute()
+        
+        # 2. Smart String Matching (Merges "Bear House" and "THEBEARHOUSE" together)
+        events = []
+        target_clean = brand.replace(" ", "").lower()
+        
+        for e in res.data:
+            db_brand = e.get("brand_name", "unknown").replace(" ", "").lower()
+            # If the database says 'bearhouse' and the URL says 'thebearhouse', it matches!
+            if db_brand in target_clean or target_clean in db_brand:
+                events.append(e)
+
+        # 3. Data Structures
 
         # 2. Data Structures
         funnel = {"widget_opened": 0, "size_calculated": 0, "add_to_cart_intent": 0, "purchase_completed": 0}
