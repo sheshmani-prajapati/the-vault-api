@@ -314,23 +314,31 @@ async def b2b_dashboard(brand: str = "Snitch"):
                     ref_b = match.group(1).upper()
                     brand_counts[ref_b] = brand_counts.get(ref_b, 0) + 1
 
-            # NEW: SKU/Product Parsing (Only count URLs, ignore generic strings)
+            # NEW: SKU/Product Parsing
             if evt in ["size_calculated", "add_to_cart_intent"] and "/" in product_url:
-                # Clean up the URL to just get the product name (e.g., "black-linen-shirt")
+                # Clean up the Shopify URL (e.g., /men-t-shirts/black-shirt -> Black Shirt)
                 clean_sku = product_url.split("/")[-1].split("?")[0].replace("-", " ").title()
-                if clean_sku:
+                if len(clean_sku) > 3: # Ignore weird tiny fragments
                     sku_counts[clean_sku] = sku_counts.get(clean_sku, 0) + 1
 
+        # Format Reference Brands
         total_refs = sum(brand_counts.values())
         reference_brands = []
         if total_refs > 0:
             for b, count in sorted(brand_counts.items(), key=lambda x: x[1], reverse=True)[:5]:
                 reference_brands.append({"brand": b, "percentage": round((count/total_refs)*100, 1), "count": count})
 
-        # NEW: Format Top SKUs for the Chart
-        top_skus = []
-        for sku, count in sorted(sku_counts.items(), key=lambda x: x[1], reverse=True)[:5]:
-            top_skus.append({"sku": sku, "count": count})
+        # Format Top SKUs into HTML Table Rows
+        sku_table_rows = ""
+        for sku, count in sorted(sku_counts.items(), key=lambda x: x[1], reverse=True)[:6]:
+            sku_table_rows += f"""
+            <tr class="border-b border-slate-700/50 hover:bg-slate-800/30 transition-colors">
+                <td class="py-3 px-4 text-slate-300 text-sm font-medium">{sku}</td>
+                <td class="py-3 px-4 text-right"><span class="bg-indigo-500/20 text-indigo-300 py-1 px-3 rounded-full text-xs font-bold">{count} Interactions</span></td>
+            </tr>
+            """
+        if not sku_table_rows:
+            sku_table_rows = "<tr><td colspan='2' class='py-4 text-center text-slate-500 text-sm'>No product data captured yet.</td></tr>"
 
         vault_opens = funnel["widget_opened"]
         purchases = funnel["purchase_completed"]
@@ -342,9 +350,7 @@ async def b2b_dashboard(brand: str = "Snitch"):
             "kpis": {"vault_conversion_rate": cvr, "rto_saved_count": rto_saved, "add_to_bag": funnel["add_to_cart_intent"]},
             "funnel": funnel,
             "reference_brands": reference_brands,
-            "top_skus": top_skus, # Injecting SKU data
             "fit_feedback": {"perfect": feedback.get("Perfect", 0), "too_tight": feedback.get("Too Tight", 0), "too_loose": feedback.get("Too Loose", 0), "returned": feedback.get("Returned", 0)},
-            "vanity_sizing": {"sizes": ["XS","S","M","L","XL","XXL"], "anchor_pct": [5, 18, 42, 21, 11, 3], "recommended_pct": [2, 11, 28, 38, 17, 4], "insight": f"Your buyers anchor to Medium (42%), but The Vault pushes them to Large (38%)."}
         }
 
         html_content = f"""
@@ -402,12 +408,25 @@ async def b2b_dashboard(brand: str = "Snitch"):
                         <h3 class="text-lg font-semibold text-white mb-6">Post-Purchase Fit Verification</h3>
                         <div class="relative h-64"><canvas id="feedbackChart"></canvas></div>
                     </div>
-                    <div class="glass-card p-6 rounded-2xl col-span-2">
-                        <h3 class="text-lg font-semibold text-white mb-4">Top Merchandising Friction Points (Most Analyzed SKUs)</h3>
-                        <p class="text-indigo-300 text-sm font-medium mb-6 bg-indigo-900/30 p-4 rounded-lg border border-indigo-500/30">
-                            💡 These specific products have the highest sizing confusion. Adding Vault recommendations to these SKUs drives the highest immediate ROI.
-                        </p>
-                        <canvas id="skuChart" height="150"></canvas>
+                    
+                    <div class="glass-card p-0 rounded-2xl col-span-2 overflow-hidden flex flex-col">
+                        <div class="p-6 border-b border-slate-700/50 bg-slate-800/30">
+                            <h3 class="text-lg font-semibold text-white">Top Merchandising Friction Points</h3>
+                            <p class="text-slate-400 text-sm mt-1">SKUs causing the highest sizing confusion among shoppers.</p>
+                        </div>
+                        <div class="p-0 overflow-auto flex-grow">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-900/50">
+                                        <th class="py-3 px-6 text-xs font-semibold text-slate-400 uppercase tracking-wider">Product Name (SKU)</th>
+                                        <th class="py-3 px-6 text-xs font-semibold text-slate-400 uppercase tracking-wider text-right">Vault Usage</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {sku_table_rows}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -422,27 +441,6 @@ async def b2b_dashboard(brand: str = "Snitch"):
                 new Chart(document.getElementById('competitorChart'), {{ type: 'bar', data: {{ labels: DATA.reference_brands.map(b => b.brand), datasets: [{{ data: DATA.reference_brands.map(b => b.count), backgroundColor: '#8b5cf6', borderRadius: 6 }}] }}, options: {{ indexAxis: 'y', plugins: {{ legend: {{ display: false }} }} }} }});
 
                 new Chart(document.getElementById('feedbackChart'), {{ type: 'doughnut', data: {{ labels: ['Perfect', 'Too Tight', 'Too Loose', 'Returned'], datasets: [{{ data: [DATA.fit_feedback.perfect, DATA.fit_feedback.too_tight, DATA.fit_feedback.too_loose, DATA.fit_feedback.returned], backgroundColor: ['#10b981', '#f59e0b', '#3b82f6', '#ef4444'], borderWidth: 0, cutout: '75%' }}] }}, options: {{ maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }} }} }} }});
-
-                // NEW: SKU Chart Configuration
-                const skuLabels = DATA.top_skus.map(s => s.sku);
-                const skuData = DATA.top_skus.map(s => s.count);
-                new Chart(document.getElementById('skuChart'), {{
-                    type: 'bar',
-                    data: {{
-                        labels: skuLabels,
-                        datasets: [{{
-                            label: 'Vault Interactions',
-                            data: skuData,
-                            backgroundColor: '#38bdf8',
-                            borderRadius: 4
-                        }}]
-                    }},
-                    options: {{
-                        indexAxis: 'y',
-                        plugins: {{ legend: {{ display: false }} }},
-                        scales: {{ x: {{ beginAtZero: true, ticks: {{ stepSize: 1 }} }} }}
-                    }}
-                }});
             </script>
         </body>
         </html>
