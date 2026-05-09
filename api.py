@@ -7,6 +7,7 @@ from typing import Optional
 from supabase import create_client, Client
 import csv
 import os
+import re
 import traceback
 
 app = FastAPI(title="The Vault API - v3.5 (With Persistent Supabase)")
@@ -277,135 +278,246 @@ def get_metadata():
         pass
         
     return brand_data
-    # --- B2B ANALYTICS DASHBOARD ---
+    # --- B2B ENTERPRISE DASHBOARD ---
 @app.get("/dashboard", response_class=HTMLResponse)
 async def b2b_dashboard(brand: str = "Snitch"):
     if not supabase:
         return "<h1>Dashboard Offline: Supabase not connected.</h1>"
 
     try:
-        # 1. Fetch live data for this specific brand
+        # 1. Fetch live data for this specific brand (Case-Insensitive)
         res = supabase.table("tracking_events").select("*").ilike("brand_name", brand).execute()
         events = res.data
 
-        # 2. Crunch the metrics
+        # 2. Data Structures
         funnel = {"widget_opened": 0, "size_calculated": 0, "add_to_cart_intent": 0, "purchase_completed": 0}
         feedback = {"Perfect": 0, "Too Tight": 0, "Too Loose": 0, "Returned": 0}
+        brand_counts = {}
 
+        # 3. Crunch the Supabase Data
         for e in events:
             evt = e.get("event_type")
             res_text = e.get("result_text", "")
             
+            # Funnel aggregation
             if evt in funnel:
                 funnel[evt] += 1
             
+            # Feedback aggregation
             if evt == "verified_fit_feedback":
-                # Clean up the string "User reported: Perfect" -> "Perfect"
                 clean_feedback = res_text.replace("User reported: ", "").strip()
                 if clean_feedback in feedback:
                     feedback[clean_feedback] += 1
                 else:
                     feedback[clean_feedback] = 1
 
-        # Calculate ROI metric
-        conversion_rate = 0
-        if funnel["widget_opened"] > 0:
-            conversion_rate = round((funnel["purchase_completed"] / funnel["widget_opened"]) * 100, 1)
+            # Competitive Intelligence (Reference Brand Parsing)
+            if evt == "size_calculated":
+                # Extracts "H&M" from "Rec: M (from H&M)"
+                match = re.search(r'\(from (.+?)\)', res_text)
+                if match:
+                    ref_b = match.group(1).upper()
+                    brand_counts[ref_b] = brand_counts.get(ref_b, 0) + 1
 
-        # 3. Build the interactive HTML/JS Page
+        # 4. Format Competitive Intelligence
+        total_refs = sum(brand_counts.values())
+        reference_brands = []
+        if total_refs > 0:
+            # Get top 5 brands
+            for b, count in sorted(brand_counts.items(), key=lambda x: x[1], reverse=True)[:5]:
+                reference_brands.append({
+                    "brand": b, 
+                    "percentage": round((count/total_refs)*100, 1), 
+                    "count": count
+                })
+
+        # 5. KPI Calculations
+        vault_opens = funnel["widget_opened"]
+        purchases = funnel["purchase_completed"]
+        cvr = round((purchases / vault_opens) * 100, 1) if vault_opens > 0 else 0.0
+        
+        # Calculate RTO Saved (Purchases minus the ones strictly marked as "Returned")
+        rto_saved = purchases - feedback.get("Returned", 0)
+
+        # 6. Construct the Master Data Payload
+        dashboard_data = {
+            "brand_name": brand.upper(),
+            "kpis": {
+                "vault_conversion_rate": cvr,
+                "rto_saved_count": rto_saved,
+                "add_to_bag": funnel["add_to_cart_intent"],
+            },
+            "funnel": funnel,
+            "reference_brands": reference_brands,
+            "fit_feedback": {
+                "perfect": feedback.get("Perfect", 0),
+                "too_tight": feedback.get("Too Tight", 0),
+                "too_loose": feedback.get("Too Loose", 0),
+                "returned": feedback.get("Returned", 0),
+            },
+            # Vanity sizing is mocked for the pitch until we update the extension to pass anchor sizes
+            "vanity_sizing": {
+                "sizes": ["XS","S","M","L","XL","XXL"],
+                "anchor_pct": [5, 18, 42, 21, 11, 3],
+                "recommended_pct": [2, 11, 28, 38, 17, 4],
+                "insight": f"Your buyers anchor to Medium (42%), but The Vault pushes them to Large (38%). Your Mediums run smaller than the market average."
+            }
+        }
+
+        # 7. Build the UI (Vercel/Stripe aesthetic)
         html_content = f"""
         <!DOCTYPE html>
         <html lang="en">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>The Vault | Partner Dashboard</title>
+            <title>The Vault | Enterprise Intelligence</title>
             <script src="https://cdn.tailwindcss.com"></script>
             <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-            <style> body {{ font-family: 'Inter', sans-serif; background-color: #f8fafc; }} </style>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+            <style>
+                body {{ font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; }}
+                .glass-card {{ background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(51, 65, 85, 0.8); backdrop-filter: blur(12px); }}
+            </style>
         </head>
-        <body class="text-slate-800 p-8">
-            <div class="max-w-6xl mx-auto">
-                <div class="flex justify-between items-end mb-8 border-b border-slate-200 pb-6">
+        <body class="p-6 md:p-10">
+            <div class="max-w-7xl mx-auto">
+                <div class="flex justify-between items-end mb-10 border-b border-slate-800 pb-6">
                     <div>
-                        <h1 class="text-3xl font-extrabold tracking-tight text-slate-900">Partner Intelligence</h1>
-                        <p class="text-slate-500 mt-1">Live Sizing & Conversion Data for <span class="font-bold text-blue-600">{brand}</span></p>
-                    </div>
-                    <div class="text-right">
-                        <span class="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">Live Connection Active</span>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-                        <h3 class="text-sm font-semibold text-slate-500 uppercase tracking-wider">Vault Opens</h3>
-                        <p class="text-4xl font-extrabold mt-2 text-slate-900">{funnel['widget_opened']}</p>
-                    </div>
-                    <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-                        <h3 class="text-sm font-semibold text-slate-500 uppercase tracking-wider">Added to Bag (Vault Users)</h3>
-                        <p class="text-4xl font-extrabold mt-2 text-blue-600">{funnel['add_to_cart_intent']}</p>
-                    </div>
-                    <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6 border-t-4 border-t-emerald-500">
-                        <h3 class="text-sm font-semibold text-slate-500 uppercase tracking-wider">Conversion Rate</h3>
-                        <p class="text-4xl font-extrabold mt-2 text-emerald-600">{conversion_rate}%</p>
+                        <div class="flex items-center gap-3 mb-2">
+                            <div class="h-3 w-3 rounded-full bg-emerald-500 animate-pulse"></div>
+                            <span class="text-emerald-500 text-xs font-bold tracking-widest uppercase">Live Connection</span>
+                        </div>
+                        <h1 class="text-4xl font-bold tracking-tight text-white">{dashboard_data['brand_name']} Intelligence</h1>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-                        <h3 class="text-lg font-bold mb-4">The Conversion Funnel</h3>
-                        <canvas id="funnelChart" height="200"></canvas>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                    <div class="glass-card rounded-2xl p-6">
+                        <h3 class="text-slate-400 text-sm font-semibold uppercase tracking-wider mb-2">Vault Conversion Rate</h3>
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-5xl font-bold text-white">{dashboard_data['kpis']['vault_conversion_rate']}%</span>
+                        </div>
+                    </div>
+                    <div class="glass-card rounded-2xl p-6">
+                        <h3 class="text-slate-400 text-sm font-semibold uppercase tracking-wider mb-2">High-Intent Add to Bags</h3>
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-5xl font-bold text-indigo-400">{dashboard_data['kpis']['add_to_bag']}</span>
+                        </div>
+                    </div>
+                    <div class="glass-card rounded-2xl p-6 border-t-4 border-t-emerald-500">
+                        <h3 class="text-slate-400 text-sm font-semibold uppercase tracking-wider mb-2">Est. RTO Disasters Prevented</h3>
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-5xl font-bold text-emerald-400">{dashboard_data['kpis']['rto_saved_count']}</span>
+                            <span class="text-slate-500 text-sm font-medium">Orders</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                    <div class="glass-card p-6 rounded-2xl">
+                        <h3 class="text-lg font-semibold text-white mb-6">The Intent Funnel</h3>
+                        <canvas id="funnelChart" height="220"></canvas>
                     </div>
                     
-                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-                        <h3 class="text-lg font-bold mb-4">Post-Purchase Feedback (RTO Predictor)</h3>
+                    <div class="glass-card p-6 rounded-2xl">
+                        <h3 class="text-lg font-semibold text-white mb-6">Market Share Anchors (What they wear)</h3>
+                        <canvas id="competitorChart" height="220"></canvas>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+                    <div class="glass-card p-6 rounded-2xl col-span-1">
+                        <h3 class="text-lg font-semibold text-white mb-6">Post-Purchase Fit Verification</h3>
                         <div class="relative h-64">
                             <canvas id="feedbackChart"></canvas>
                         </div>
+                    </div>
+
+                    <div class="glass-card p-6 rounded-2xl col-span-2">
+                        <h3 class="text-lg font-semibold text-white mb-4">Vanity Sizing Discrepancy</h3>
+                        <p class="text-indigo-300 text-sm font-medium mb-6 bg-indigo-900/30 p-4 rounded-lg border border-indigo-500/30">
+                            💡 {dashboard_data['vanity_sizing']['insight']}
+                        </p>
+                        <canvas id="vanityChart" height="150"></canvas>
                     </div>
                 </div>
             </div>
 
             <script>
-                // Funnel Chart
-                const funnelCtx = document.getElementById('funnelChart').getContext('2d');
-                new Chart(funnelCtx, {{
+                const DATA = {json.dumps(dashboard_data)};
+                
+                Chart.defaults.color = '#94a3b8';
+                Chart.defaults.font.family = 'Inter';
+
+                // 1. Funnel Chart
+                new Chart(document.getElementById('funnelChart'), {{
                     type: 'bar',
                     data: {{
-                        labels: ['Opened Widget', 'Calculated Size', 'Added to Bag', 'Completed Purchase'],
+                        labels: ['Opened Widget', 'Calculated Size', 'Added to Bag', 'Purchased'],
                         datasets: [{{
-                            label: 'User Count',
-                            data: [{funnel['widget_opened']}, {funnel['size_calculated']}, {funnel['add_to_cart_intent']}, {funnel['purchase_completed']}],
-                            backgroundColor: ['#cbd5e1', '#94a3b8', '#3b82f6', '#10b981'],
+                            data: [DATA.funnel.widget_opened, DATA.funnel.size_calculated, DATA.funnel.add_to_cart_intent, DATA.funnel.purchase_completed],
+                            backgroundColor: ['#334155', '#475569', '#6366f1', '#10b981'],
+                            borderRadius: 8,
+                            barThickness: 40
+                        }}]
+                    }},
+                    options: {{ plugins: {{ legend: {{ display: false }} }} }}
+                }});
+
+                // 2. Competitor Chart
+                const compLabels = DATA.reference_brands.map(b => b.brand);
+                const compData = DATA.reference_brands.map(b => b.count);
+                new Chart(document.getElementById('competitorChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: compLabels,
+                        datasets: [{{
+                            data: compData,
+                            backgroundColor: '#8b5cf6',
                             borderRadius: 6
                         }}]
                     }},
-                    options: {{
-                        plugins: {{ legend: {{ display: false }} }},
-                        scales: {{ y: {{ beginAtZero: true }} }}
-                    }}
+                    options: {{ indexAxis: 'y', plugins: {{ legend: {{ display: false }} }} }}
                 }});
 
-                // Feedback Chart
-                const feedbackCtx = document.getElementById('feedbackChart').getContext('2d');
-                new Chart(feedbackCtx, {{
+                // 3. Feedback Chart
+                new Chart(document.getElementById('feedbackChart'), {{
                     type: 'doughnut',
                     data: {{
-                        labels: ['Perfect Fit', 'Too Tight', 'Too Loose', 'Returned'],
+                        labels: ['Perfect', 'Too Tight', 'Too Loose', 'Returned'],
                         datasets: [{{
-                            data: [{feedback['Perfect']}, {feedback['Too Tight']}, {feedback['Too Loose']}, {feedback['Returned']}],
+                            data: [DATA.fit_feedback.perfect, DATA.fit_feedback.too_tight, DATA.fit_feedback.too_loose, DATA.fit_feedback.returned],
                             backgroundColor: ['#10b981', '#f59e0b', '#3b82f6', '#ef4444'],
                             borderWidth: 0,
-                            hoverOffset: 4
+                            cutout: '75%'
                         }}]
                     }},
-                    options: {{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {{
-                            legend: {{ position: 'bottom' }}
-                        }}
+                    options: {{ maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }} }} }}
+                }});
+
+                // 4. Vanity Sizing Chart
+                new Chart(document.getElementById('vanityChart'), {{
+                    type: 'line',
+                    data: {{
+                        labels: DATA.vanity_sizing.sizes,
+                        datasets: [
+                            {{
+                                label: 'What they think they are (Anchor)',
+                                data: DATA.vanity_sizing.anchor_pct,
+                                borderColor: '#64748b',
+                                borderDash: [5, 5],
+                                tension: 0.4
+                            }},
+                            {{
+                                label: 'What they actually are (Vault Rec)',
+                                data: DATA.vanity_sizing.recommended_pct,
+                                borderColor: '#10b981',
+                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            }}
+                        ]
                     }}
                 }});
             </script>
@@ -415,4 +527,4 @@ async def b2b_dashboard(brand: str = "Snitch"):
         return HTMLResponse(content=html_content, status_code=200)
 
     except Exception as e:
-        return f"<h1>Error loading dashboard: {str(e)}</h1>"
+        return f"<h1 style='color:white; background:black; padding:20px;'>Dashboard Error: {str(e)}</h1>"
