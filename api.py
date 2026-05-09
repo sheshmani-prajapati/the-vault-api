@@ -124,6 +124,32 @@ def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str, ta
         if not db:
             raise ValueError("The CSV file was found, but it appears to be empty.")
 
+        # --- NEW: THE COMMUNITY FLYWHEEL (CLOSED LOOP) ---
+        community_offset_inches = 0.0
+        community_insight = ""
+        
+        if supabase:
+            try:
+                # Fetch verified feedback for this specific brand
+                res = supabase.table("tracking_events").select("result_text").eq("event_type", "verified_fit_feedback").ilike("brand_name", target_brand).execute()
+                
+                tight_count = sum(1 for row in res.data if "Too Tight" in row.get("result_text", ""))
+                loose_count = sum(1 for row in res.data if "Too Loose" in row.get("result_text", ""))
+                        
+                # For every net "Too Tight" vote, shrink the brand's chest size by 0.1 inches.
+                raw_offset = (tight_count - loose_count) * 0.10  
+                
+                # Cap the offset to prevent breaking the core engine
+                community_offset_inches = max(-1.5, min(1.5, raw_offset))
+                
+                if community_offset_inches >= 0.4:
+                    community_insight = " 🔄 Community Data: Buyers report this brand runs tight. We mathematically sized you up."
+                elif community_offset_inches <= -0.4:
+                    community_insight = " 🔄 Community Data: Buyers report this brand runs large. We mathematically sized you down."
+            except Exception as e:
+                print(f"Flywheel Error: {e}")
+        # --------------------------------------------------
+
         norm_ref_brand = normalize_match(ref_brand)
         norm_ref_fit = normalize_match(ref_fit)
         norm_target_brand = normalize_match(target_brand)
@@ -176,7 +202,10 @@ def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str, ta
                 if t_min is None or t_max is None: 
                     continue
                 
-                target_true_inches = (t_min + t_max) / 2
+                # --- FLYWHEEL APPLIED HERE ---
+                # Subtracting the offset makes the target shirt mathematically smaller (or larger) 
+                # based entirely on your Supabase feedback.
+                target_true_inches = ((t_min + t_max) / 2) - community_offset_inches
                 target_shoulder = safe_float(row.get('Shoulder (Inches)'))
                 
                 chest_diff = target_true_inches - ref_true_inches
@@ -206,7 +235,7 @@ def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str, ta
         # DEALBREAKER
         winner_t_min = safe_float(best_match.get('Chest Min (Inches)'))
         winner_t_max = safe_float(best_match.get('Chest Max (Inches)'))
-        winner_target_inches = (winner_t_min + winner_t_max) / 2
+        winner_target_inches = ((winner_t_min + winner_t_max) / 2) - community_offset_inches
         
         final_chest_diff = winner_target_inches - ref_true_inches
         
@@ -235,6 +264,10 @@ def check_fit(ref_brand: str, ref_size: str, ref_fit: str, target_brand: str, ta
         if not exact_fit_found:
             fallback_label = safe_str(ref_data.get('Fit Type')).title()
             warning_message = f"💡 We based this on your {ref_brand.title()} ({fallback_label}) size. " + warning_message
+            
+        # Append the Community Insight if the flywheel triggered a massive change
+        if community_insight:
+            warning_message += community_insight
 
         return {
             "status": "success",
