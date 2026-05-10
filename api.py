@@ -42,6 +42,7 @@ class TrackingPayload(BaseModel):
     brand: Optional[str] = None
     result: Optional[str] = None
     uuid: Optional[str] = "anonymous" # Added the UUID from the Chrome Extension
+    price: Optional[float] = 0.0
 
 # --- NEW TRACKING ENDPOINT ---
 @app.post("/track_event")
@@ -63,6 +64,7 @@ async def track_event(payload: TrackingPayload):
             "event_type": payload.event,
             "product_id": payload.product_id or "N/A",
             "result_text": payload.result or "N/A"
+            "product_price": payload.price
         }).execute()
         
         return {"status": "success", "recorded_event": payload.event}
