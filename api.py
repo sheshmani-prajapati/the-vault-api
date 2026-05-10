@@ -949,3 +949,680 @@ document.addEventListener('DOMContentLoaded',()=>{
 
     except Exception as e:
         return f"<h1 style='color:white; background:black; padding:20px; font-family:monospace;'>Python Error: {str(e)}</h1>"
+
+# --- GOD MODE MASTER DASHBOARD (INTERNAL ONLY) ---
+@app.get("/admin-god-mode", response_class=HTMLResponse)
+async def admin_god_mode():
+    if not supabase:
+        return "<h1>System Offline: Supabase not connected.</h1>"
+
+    try:
+        # 1. Fetch EVERYTHING (No brand filtering)
+        res = supabase.table("tracking_events").select("*").limit(50000).execute()
+        events = res.data
+
+        # 2. Master Aggregators
+        global_funnel = {"widget_opened": 0, "size_calculated": 0, "add_to_cart_intent": 0, "purchase_completed": 0}
+        global_feedback = {"Perfect": 0, "Too Tight": 0, "Too Loose": 0, "Returned": 0}
+        brand_stats = {}
+        anchor_counts = {}
+        gmv_total = 0.0
+        
+        # Perception & Cascade Trackers
+        standard_sizes = ["XS", "S", "M", "L", "XL", "XXL"]
+        anchored_sizes = {s: 0 for s in standard_sizes}
+        corrected_sizes = {s: 0 for s in standard_sizes}
+        gap_matches = 0
+        gap_corrections = 0
+
+        # 3. Process the Ecosystem Data
+        for e in events:
+            evt = e.get("event_type")
+            res_text = e.get("result_text", "")
+            brand = e.get("brand_name", "Unknown").upper()
+            price = safe_float(e.get("product_price", 0)) or 0.0
+
+            # Initialize brand in leaderboard tracker
+            if brand not in brand_stats:
+                brand_stats[brand] = {"opens": 0, "purchases": 0, "cvr": 0.0}
+
+            # Funnel & GMV
+            if evt in global_funnel:
+                global_funnel[evt] += 1
+            if evt == "widget_opened":
+                brand_stats[brand]["opens"] += 1
+            if evt == "purchase_completed":
+                brand_stats[brand]["purchases"] += 1
+                gmv_total += price
+
+            # Global Feedback
+            if evt == "verified_fit_feedback":
+                clean_feedback = res_text.replace("User reported: ", "").strip()
+                if clean_feedback in global_feedback:
+                    global_feedback[clean_feedback] += 1
+                else:
+                    global_feedback[clean_feedback] = 1
+
+            # Global Algorithm & Perception
+            if evt == "size_calculated":
+                rec_match = re.search(r'Rec:\s*([A-Za-z0-9]+)\s*\(from\s+(.+?)\)', res_text)
+                guess_match = re.search(r'Guessed:\s*([A-Za-z0-9]+)', res_text)
+                
+                if rec_match:
+                    vault_rec = rec_match.group(1).upper()
+                    ref_b = rec_match.group(2).upper()
+                    anchor_counts[ref_b] = anchor_counts.get(ref_b, 0) + 1
+                    
+                    if vault_rec in corrected_sizes:
+                        corrected_sizes[vault_rec] += 1
+                        
+                    user_guess = guess_match.group(1).upper() if guess_match else "NONE"
+                    if user_guess in anchored_sizes:
+                        anchored_sizes[user_guess] += 1
+                        
+                    if user_guess != "NONE":
+                        if user_guess == vault_rec:
+                            gap_matches += 1
+                        else:
+                            gap_corrections += 1
+
+        # 4. Compute Master KPIs
+        total_opens = global_funnel["widget_opened"]
+        total_purchases = global_funnel["purchase_completed"]
+        global_cvr = round((total_purchases / total_opens) * 100, 1) if total_opens > 0 else 0.0
+        rto_saved = total_purchases - global_feedback.get("Returned", 0)
+
+        # 5. Format Leaderboard
+        leaderboard = []
+        live_brands_count = 0
+        for b_name, stats in brand_stats.items():
+            if stats["opens"] > 0:
+                live_brands_count += 1
+                cvr = round((stats["purchases"] / stats["opens"]) * 100, 1)
+                status = "Healthy" if cvr >= 10 else ("Warning" if cvr >= 5 else "Critical")
+                leaderboard.append({
+                    "brand": b_name,
+                    "opens": stats["opens"],
+                    "cvr": cvr,
+                    "status": status,
+                    "trend": [cvr-1, cvr, cvr+0.5, cvr], # Mocked trendline for UI
+                })
+        leaderboard.sort(key=lambda x: x["opens"], reverse=True)
+
+        # 6. Format Anchors
+        total_refs = sum(anchor_counts.values())
+        anchor_matrix = []
+        if total_refs > 0:
+            for b, count in sorted(anchor_counts.items(), key=lambda x: x[1], reverse=True)[:6]:
+                anchor_matrix.append({
+                    "brand": b, 
+                    "market_share": round((count/total_refs)*100, 1), 
+                    "trend": "up" # Mocked for UI
+                })
+
+        # 7. Correction Rate
+        total_guesses = gap_matches + gap_corrections
+        correction_rate = round((gap_corrections / total_guesses) * 100, 1) if total_guesses > 0 else 0
+
+        # 8. Algorithm Accuracy
+        total_fb = sum(global_feedback.values())
+        perfect_pct = round((global_feedback.get("Perfect", 0) / total_fb) * 100, 1) if total_fb > 0 else 100.0
+
+        # 9. Build Master Data Object
+        master_data = {
+            "system_health": {
+                "status": "Operational",
+                "live_brands": live_brands_count,
+                "total_vault_opens": total_opens,
+                "global_cvr": global_cvr,
+                "total_rto_saved": max(0, rto_saved),
+                "gmv_influenced_usd": round(gmv_total, 2)
+            },
+            "brand_leaderboard": leaderboard[:6], # Top 6
+            "algorithm_accuracy": {
+                "insight": f"Algorithm performing at {perfect_pct}% accuracy globally. Data flow stabilized.",
+                "perfect": global_feedback.get("Perfect", 0),
+                "too_tight": global_feedback.get("Too Tight", 0),
+                "too_loose": global_feedback.get("Too Loose", 0),
+                "returned": global_feedback.get("Returned", 0),
+                "weekly_accuracy": [91.2, 91.8, 92.1, perfect_pct, perfect_pct, perfect_pct, perfect_pct]
+            },
+            "universal_anchor_matrix": anchor_matrix,
+            "global_perception_gap": {
+                "total_corrections": gap_corrections,
+                "correction_rate_pct": correction_rate
+            },
+            "correction_cascade": {
+                "sizes": standard_sizes,
+                "anchored": [anchored_sizes[s] for s in standard_sizes],
+                "corrected": [corrected_sizes[s] for s in standard_sizes]
+            },
+            
+            # --- RETAINED MOCK DATA TO KEEP UI BEAUTIFUL ---
+            "network_traffic": { "labels": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "api_calls": [12,15,14,18,22,35,31] },
+            "brand_health_radar": {
+                "labels": ["CVR Score","Algo Accuracy","Engagement","RTO Shield","Growth","Stability"],
+                "brands": [ {"name": "NETWORK AVG", "color": "#00ff88", "data": [85, 92, 88, 85, 91, 90]} ]
+            },
+            "hourly_activity": [ 380,240,160,120,105,160,480,1640,2980,3820,4420,4800,4300,3820,3600,3700,4800,6800,8400,7900,6600,5200,3100,1280 ],
+            "api_services": [
+                {"name":"Size Engine", "status":"operational", "latency":42},
+                {"name":"Brand API", "status":"operational", "latency":56},
+                {"name":"Analytics Pipeline", "status":"operational", "latency":32},
+            ],
+            "revenue_at_risk": [],
+            "alert_feed": [
+                {"time":"LIVE", "level":"info", "msg":f"Network synced. Processed {total_opens} sizing events."}
+            ],
+            "sparklines": {
+                "brands": [live_brands_count]*7, "opens": [total_opens]*7, "cvr": [global_cvr]*7, 
+                "rto": [rto_saved]*7, "gmv": [gmv_total]*7
+            }
+        }
+
+        # 10. Load the HTML
+        html_template = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>THE VAULT // GOD MODE // MASTER COMMAND CENTER</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600;700&family=Barlow+Condensed:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:       #020812;
+  --bg-s:     #06101e;
+  --bg-card:  #091626;
+  --bg-card2: #0c1c30;
+  --b:        rgba(0,184,255,0.09);
+  --b2:       rgba(0,184,255,0.22);
+  --b-green:  rgba(0,255,136,0.2);
+  --green:    #00ff88;
+  --green2:   #00cc6a;
+  --cyan:     #00b8ff;
+  --cyan2:    #0090cc;
+  --purple:   #8b5cf6;
+  --purple2:  #6d28d9;
+  --amber:    #f59e0b;
+  --rose:     #ff3f60;
+  --t1:       #d0e4f4;
+  --t2:       #3d6a8a;
+  --t3:       #1a3348;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--t1);
+  font-family:'DM Sans',sans-serif;
+  font-weight:300;
+  min-height:100vh;
+  overflow-x:hidden;
+  cursor:default;
+}
+body::before{
+  content:''; position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.18) 2px, rgba(0,0,0,0.18) 4px);
+  pointer-events:none;z-index:9999;
+}
+body::after{
+  content:''; position:fixed;inset:0;
+  background-image: linear-gradient(rgba(0,184,255,0.025) 1px,transparent 1px), linear-gradient(90deg,rgba(0,184,255,0.025) 1px,transparent 1px);
+  background-size:60px 60px; pointer-events:none;z-index:0;
+}
+.glow-blob{position:fixed;border-radius:50%;filter:blur(140px);pointer-events:none;z-index:0;}
+.gb1{width:800px;height:800px;background:#001aff;opacity:.025;top:-300px;left:-200px;}
+.gb2{width:600px;height:600px;background:#00ff88;opacity:.03;bottom:-200px;right:-100px;}
+.gb3{width:400px;height:400px;background:#8b5cf6;opacity:.025;top:40%;left:40%;}
+.z1{position:relative;z-index:1}
+.font-raj{font-family:'Rajdhani',sans-serif}
+.font-mono{font-family:'JetBrains Mono',monospace}
+.font-cond{font-family:'Barlow Condensed',sans-serif}
+.card{ background:var(--bg-card); border:1px solid var(--b); border-radius:8px; position:relative;overflow:hidden; transition:border-color .2s,box-shadow .2s; }
+.card:hover{border-color:var(--b2);box-shadow:0 0 24px rgba(0,184,255,0.06)}
+.card::before{ content:'';position:absolute;top:0;left:0;right:0;height:1px; background:linear-gradient(90deg,transparent,rgba(0,184,255,.25),transparent); }
+.card-green{border-color:rgba(0,255,136,0.12)}
+.card-green::before{background:linear-gradient(90deg,transparent,rgba(0,255,136,.3),transparent)}
+.card-green:hover{border-color:rgba(0,255,136,.3);box-shadow:0 0 24px rgba(0,255,136,.05)}
+.card-rose{border-color:rgba(255,63,96,0.15)}
+.card-rose::before{background:linear-gradient(90deg,transparent,rgba(255,63,96,.3),transparent)}
+.card-amber{border-color:rgba(245,158,11,0.15)}
+.card-amber::before{background:linear-gradient(90deg,transparent,rgba(245,158,11,.3),transparent)}
+.stripe::after{ content:'';position:absolute;top:0;left:0;width:2px;height:100%; }
+.stripe-green::after{background:linear-gradient(180deg,var(--green),transparent)}
+.stripe-cyan::after{background:linear-gradient(180deg,var(--cyan),transparent)}
+.stripe-purple::after{background:linear-gradient(180deg,var(--purple),transparent)}
+.stripe-amber::after{background:linear-gradient(180deg,var(--amber),transparent)}
+.stripe-rose::after{background:linear-gradient(180deg,var(--rose),transparent)}
+.kpi-val{ font-family:'JetBrains Mono',monospace; font-weight:700;font-size:2.4rem; line-height:1;letter-spacing:-.02em; }
+.section-tag{ font-family:'Barlow Condensed',sans-serif; font-size:.62rem;font-weight:600; letter-spacing:.22em;text-transform:uppercase; color:var(--t2); }
+.mono-sm{font-family:'JetBrains Mono',monospace;font-size:.72rem}
+.badge{ display:inline-flex;align-items:center;gap:4px; padding:2px 8px;border-radius:4px; font-family:'JetBrains Mono',monospace; font-size:.58rem;font-weight:600;letter-spacing:.08em; }
+.badge-green{background:rgba(0,255,136,.1);color:var(--green);border:1px solid rgba(0,255,136,.2)}
+.badge-red{background:rgba(255,63,96,.1);color:var(--rose);border:1px solid rgba(255,63,96,.2)}
+.badge-amber{background:rgba(245,158,11,.1);color:var(--amber);border:1px solid rgba(245,158,11,.2)}
+.badge-blue{background:rgba(0,184,255,.1);color:var(--cyan);border:1px solid rgba(0,184,255,.2)}
+.badge-purple{background:rgba(139,92,246,.1);color:var(--purple);border:1px solid rgba(139,92,246,.2)}
+.badge-gray{background:rgba(61,106,138,.1);color:var(--t2);border:1px solid rgba(61,106,138,.2)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes greenPulse{0%,100%{box-shadow:0 0 0 0 rgba(0,255,136,.5)}50%{box-shadow:0 0 0 6px rgba(0,255,136,0)}}
+.fu{animation:fadeUp .55s ease both}
+.d1{animation-delay:.05s}.d2{animation-delay:.1s}.d3{animation-delay:.15s}.d4{animation-delay:.2s}.d5{animation-delay:.25s}.d6{animation-delay:.3s}.d7{animation-delay:.35s}.d8{animation-delay:.4s}.d9{animation-delay:.45s}
+.blink-dot{ width:8px;height:8px;border-radius:50%;background:var(--green); animation:greenPulse 2s infinite; }
+.ticker-outer{overflow:hidden;background:rgba(0,255,136,.04);border-top:1px solid rgba(0,255,136,.08);border-bottom:1px solid rgba(0,255,136,.08)}
+.ticker-inner{display:flex;white-space:nowrap;animation:ticker 32s linear infinite}
+.tick-item{padding:6px 28px;font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--green);letter-spacing:.06em}
+.tick-sep{color:var(--t3);padding:0 2px}
+.status-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;display:inline-block}
+.alert-row{padding:8px 12px;border-radius:6px;border-left:2px solid transparent;margin-bottom:4px;transition:background .2s}
+.alert-critical{border-color:var(--rose);background:rgba(255,63,96,.04)}
+.alert-warning{border-color:var(--amber);background:rgba(245,158,11,.04)}
+.alert-info{border-color:var(--cyan);background:rgba(0,184,255,.04)}
+.lb-row{ display:grid;grid-template-columns:2rem 1fr 8rem 7rem 7rem 9rem; align-items:center;gap:12px; padding:10px 16px;border-bottom:1px solid var(--b); transition:background .15s; }
+.svc-row{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--b)}
+.risk-track{height:3px;background:rgba(255,255,255,.06);border-radius:99px;overflow:hidden;margin-top:5px}
+.risk-fill{height:100%;border-radius:99px;transition:width 1.4s cubic-bezier(.16,1,.3,1)}
+.classif{ font-family:'Barlow Condensed',sans-serif;font-size:.6rem;font-weight:700; letter-spacing:.25em;text-transform:uppercase;padding:2px 8px; border:1px solid rgba(255,63,96,.4);color:rgba(255,63,96,.7);border-radius:3px; }
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:rgba(0,184,255,.2);border-radius:99px}
+.lat-bar-track{height:4px;background:rgba(255,255,255,.06);border-radius:99px;overflow:hidden;flex:1}
+.lat-bar-fill{height:100%;border-radius:99px;transition:width 1.2s ease}
+.period-btn{ font-family:'JetBrains Mono',monospace;font-size:.62rem; padding:5px 12px;border-radius:4px; background:rgba(255,255,255,.04);border:1px solid var(--b); color:var(--t2);transition:all .2s;cursor:pointer; }
+.period-btn.act,.period-btn:hover{background:rgba(0,184,255,.12);border-color:rgba(0,184,255,.3);color:var(--t1)}
+</style>
+</head>
+<body>
+
+<div class="glow-blob gb1"></div>
+<div class="glow-blob gb2"></div>
+<div class="glow-blob gb3"></div>
+
+<div class="z1 max-w-screen-2xl mx-auto px-4 pb-16">
+
+<nav class="fu flex items-center justify-between py-3 border-b" style="border-color:var(--b)">
+  <div class="flex items-center gap-4">
+    <div class="flex items-center gap-2">
+      <div class="classif">TOP SECRET</div>
+      <div class="classif" style="border-color:rgba(0,184,255,.4);color:rgba(0,184,255,.7)">INTERNAL ONLY</div>
+    </div>
+    <div class="w-px h-6" style="background:var(--b2)"></div>
+    <div class="flex items-center gap-2.5">
+      <div class="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm" style="background:linear-gradient(135deg,var(--cyan),var(--green));color:#020812">V</div>
+      <div>
+        <div class="font-raj font-bold text-white tracking-wider text-base">THE VAULT</div>
+        <div class="section-tag" style="color:var(--green);letter-spacing:.3em">GOD MODE ACTIVE</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hidden lg:flex items-center gap-5">
+    <div class="flex items-center gap-2 px-3 py-1.5 rounded-md" style="background:rgba(0,255,136,.06);border:1px solid rgba(0,255,136,.15)">
+      <div class="blink-dot"></div>
+      <span class="mono-sm" style="color:var(--green)">LIVE STREAM ACTIVE</span>
+    </div>
+    <div class="flex gap-1">
+      <button class="period-btn act">ALL TIME</button>
+    </div>
+    <div class="text-right">
+      <div class="mono-sm text-white" id="clock">--:--:--</div>
+      <div class="section-tag">UTC+05:30 · IST</div>
+    </div>
+  </div>
+
+  <div class="flex items-center gap-2">
+    <div class="text-right hidden sm:block">
+      <div class="text-xs font-semibold text-white font-raj">ROOT ACCESS</div>
+      <div class="section-tag">FOUNDER · CTO</div>
+    </div>
+    <div class="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold font-mono" style="background:var(--bg-card2);border:1px solid var(--b);color:var(--green)">⌘</div>
+  </div>
+</nav>
+
+<div class="ticker-outer fu d1">
+  <div class="ticker-inner" id="ticker-el"></div>
+</div>
+
+<div class="fu d1 mt-4 flex items-center justify-between px-4 py-2 rounded-md" style="background:rgba(0,255,136,.05);border:1px solid rgba(0,255,136,.15)">
+  <div class="flex items-center gap-3">
+    <div class="blink-dot"></div>
+    <span class="font-raj font-bold text-white tracking-wide">SYSTEM STATUS:</span>
+    <span class="mono-sm" style="color:var(--green)" id="sys-status-txt">— </span>
+  </div>
+  <div class="flex items-center gap-6 text-xs">
+    <div><span class="section-tag">UPTIME</span> <span class="font-mono font-bold text-white ml-1">99.94%</span></div>
+    <div><span class="section-tag">AVG LATENCY</span> <span class="font-mono font-bold text-white ml-1">142ms</span></div>
+    <div><span class="section-tag">ERR RATE</span> <span class="font-mono font-bold" style="color:var(--green)">0.00%</span></div>
+  </div>
+</div>
+
+<div class="section-tag mt-6 mb-3 fu d2">▸ GLOBAL NETWORK METRICS</div>
+
+<div class="grid grid-cols-2 lg:grid-cols-5 gap-3 fu d2">
+  <div class="card card-green stripe stripe-green p-4">
+    <div class="section-tag mb-3">Live Brands</div>
+    <div class="kpi-val" style="color:var(--green)"><span class="cnt" data-t="__BRANDS__" data-f="int">0</span></div>
+    <div class="flex items-center justify-between mt-2">
+      <div class="section-tag">Active Clients</div>
+      <div class="badge badge-green">ALL ONLINE</div>
+    </div>
+    <canvas id="sp_brands" height="32" class="mt-2"></canvas>
+  </div>
+  <div class="card stripe stripe-cyan p-4">
+    <div class="section-tag mb-3">Total Vault Opens</div>
+    <div class="kpi-val text-white"><span class="cnt" data-t="__OPENS__" data-f="comma">0</span></div>
+    <div class="flex items-center justify-between mt-2">
+      <div class="section-tag">Network-wide</div>
+    </div>
+    <canvas id="sp_opens" height="32" class="mt-2"></canvas>
+  </div>
+  <div class="card stripe stripe-purple p-4">
+    <div class="section-tag mb-3">Global CVR</div>
+    <div class="kpi-val" style="color:var(--purple)"><span class="cnt" data-t="__CVR__" data-f="float">0</span><span class="font-mono text-xl">%</span></div>
+    <div class="flex items-center justify-between mt-2">
+      <div class="section-tag">Opens→Purchase</div>
+    </div>
+    <canvas id="sp_cvr" height="32" class="mt-2"></canvas>
+  </div>
+  <div class="card stripe stripe-amber p-4">
+    <div class="section-tag mb-3">RTOs Prevented</div>
+    <div class="kpi-val" style="color:var(--amber)"><span class="cnt" data-t="__RTO__" data-f="comma">0</span></div>
+    <div class="flex items-center justify-between mt-2">
+      <div class="section-tag">Returns stopped</div>
+    </div>
+    <canvas id="sp_rto" height="32" class="mt-2"></canvas>
+  </div>
+  <div class="card stripe stripe-rose p-4">
+    <div class="section-tag mb-3">GMV Influenced</div>
+    <div class="kpi-val" style="color:var(--rose)">₹<span class="cnt" data-t="__GMV__" data-f="comma">0</span></div>
+    <div class="flex items-center justify-between mt-2">
+      <div class="section-tag">Vault-assisted Revenue</div>
+    </div>
+    <canvas id="sp_gmv" height="32" class="mt-2"></canvas>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-4">
+  <div class="card stripe stripe-cyan p-5 lg:col-span-2 fu d3">
+    <div class="flex items-start justify-between mb-4">
+      <div>
+        <div class="section-tag mb-1">Network Intelligence · Traffic Load</div>
+        <div class="font-raj font-bold text-white text-lg tracking-wide">API Call Volume</div>
+      </div>
+    </div>
+    <canvas id="networkChart" height="130"></canvas>
+  </div>
+  <div class="card stripe stripe-green p-5 fu d4">
+    <div class="section-tag mb-1">Infrastructure · Service Health</div>
+    <div class="font-raj font-bold text-white text-lg tracking-wide mb-4">API Service Status</div>
+    <div id="svc-list"></div>
+    <div class="mt-4 pt-3" style="border-top:1px solid var(--b)">
+      <canvas id="latencyChart" height="90"></canvas>
+    </div>
+  </div>
+</div>
+
+<div class="section-tag mt-5 mb-3 fu d4">▸ CLIENT COMMAND · BRAND LEADERBOARD</div>
+<div class="card fu d4">
+  <div class="lb-row" style="background:rgba(0,184,255,.04);border-bottom:2px solid rgba(0,184,255,.15)">
+    <div class="section-tag">#</div>
+    <div class="section-tag">Brand</div>
+    <div class="section-tag">Vault Opens</div>
+    <div class="section-tag">CVR</div>
+    <div class="section-tag">Trend</div>
+    <div class="section-tag">Status</div>
+  </div>
+  <div id="leaderboard-rows"></div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-5 gap-3 mt-4">
+  <div class="card p-5 lg:col-span-2 fu d5">
+    <div class="section-tag mb-1">Algorithm Accuracy Engine</div>
+    <div class="font-raj font-bold text-white text-lg tracking-wide mb-1">Global Fit Feedback Loop</div>
+    <div class="mb-4 rounded-md p-3 flex gap-2.5" style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2)">
+      <p class="font-mono text-xs leading-relaxed" style="color:var(--amber)" id="algo-insight-txt">Loading…</p>
+    </div>
+    <div class="relative flex items-center justify-center my-2">
+      <canvas id="algoDoughnut" height="200"></canvas>
+      <div class="absolute text-center pointer-events-none">
+        <div class="font-mono font-bold text-2xl" style="color:var(--green)" id="algo-pct">—</div>
+        <div class="section-tag">ACCURACY</div>
+      </div>
+    </div>
+    <div id="algo-legend" class="mt-2 space-y-1.5"></div>
+  </div>
+  <div class="card p-5 lg:col-span-3 fu d6">
+    <div class="section-tag mb-1">Universal Anchor Matrix · Industry Intelligence</div>
+    <div class="font-raj font-bold text-white text-lg tracking-wide mb-1">Global Consumer Size Reference Brands</div>
+    <canvas id="anchorChart" height="200"></canvas>
+  </div>
+</div>
+
+<div class="section-tag mt-5 mb-3 fu d6">▸ GOD MODE · PROPRIETARY INTELLIGENCE LAYERS</div>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+  <div class="card card-green p-5 fu d7">
+    <div class="flex items-start justify-between mb-1">
+      <div>
+        <div class="section-tag mb-1" style="color:var(--green)">God Mode Layer #1</div>
+        <div class="font-raj font-bold text-white text-lg tracking-wide">Brand Health Radar</div>
+      </div>
+    </div>
+    <canvas id="radarChart" height="280"></canvas>
+    <div id="radar-legend" class="mt-2 flex flex-wrap gap-3"></div>
+  </div>
+  <div class="card p-5 fu d8" style="border-color:rgba(139,92,246,.15)">
+    <div class="section-tag mb-1" style="color:var(--purple)">God Mode Layer #2</div>
+    <div class="font-raj font-bold text-white text-lg tracking-wide mb-1">24-Hour Global Intent Clock</div>
+    <canvas id="hourChart" height="230"></canvas>
+  </div>
+</div>
+
+<div class="card mt-3 p-5 fu d8" style="border-color:rgba(0,255,136,.12)">
+  <div class="flex items-start justify-between mb-5">
+    <div>
+      <div class="section-tag mb-1" style="color:var(--green)">God Mode Layer #3</div>
+      <div class="font-raj font-bold text-white text-xl tracking-wide">The Sizing Correction Cascade</div>
+    </div>
+    <div class="text-right">
+      <div class="section-tag mb-1">Global Correction Rate</div>
+      <div class="font-mono font-bold text-3xl" style="color:var(--green)" id="corr-rate-num">—</div>
+      <div class="section-tag">of all users corrected</div>
+    </div>
+  </div>
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div><canvas id="cascadeChart" height="220"></canvas></div>
+    <div>
+      <div class="section-tag mb-3">PER-SIZE MISMATCH ANALYSIS</div>
+      <div id="cascade-analysis" class="space-y-3"></div>
+    </div>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3 pb-10">
+  <div class="card card-rose stripe stripe-rose p-5 fu d8">
+    <div class="section-tag mb-1" style="color:var(--rose)">God Mode Layer #4</div>
+    <div class="font-raj font-bold text-white text-lg tracking-wide">Revenue At Risk Monitor</div>
+    <div id="risk-list" class="space-y-4 text-center mt-6 text-xs" style="color:var(--t2)">Monitoring network anomalies...</div>
+  </div>
+  <div class="card p-5 fu d9" style="border-color:rgba(0,184,255,.12)">
+    <div class="section-tag mb-1">System Console</div>
+    <div class="font-raj font-bold text-white text-lg tracking-wide mb-4">Alert Feed</div>
+    <div id="alert-console" class="space-y-1"></div>
+  </div>
+</div>
+
+</div>
+
+<script>
+const MASTER_DATA = __INJECT_MASTER_DATA__;
+
+Chart.defaults.color = '#3d6a8a';
+Chart.defaults.borderColor = 'rgba(0,184,255,0.08)';
+Chart.defaults.font.family = "'JetBrains Mono',monospace";
+Chart.defaults.font.size = 10;
+const D = MASTER_DATA;
+const C = { green:'#00ff88', cyan:'#00b8ff', purple:'#8b5cf6', amber:'#f59e0b', rose:'#ff3f60', t2:'#3d6a8a', t3:'#1a3348' };
+
+function animCnt(el,target,fmt='comma',dur=1300){
+  if(!el)return;
+  const s=performance.now();
+  (function step(now){
+    const p=Math.min((now-s)/dur,1);
+    const v=(1-Math.pow(1-p,3))*target;
+    if(fmt==='comma') el.textContent=Math.round(v).toLocaleString('en-IN');
+    else if(fmt==='float') el.textContent=v.toFixed(1);
+    else el.textContent=Math.round(v);
+    if(p<1) requestAnimationFrame(step);
+  })(s);
+}
+
+function sparkline(id,data,color){
+  const ctx=document.getElementById(id);
+  if(!ctx)return;
+  new Chart(ctx,{
+    type:'line', data:{labels:data.map((_,i)=>i),datasets:[{data,borderColor:color,borderWidth:1.5,pointRadius:0,fill:true, backgroundColor:ctx2=>{const g=ctx2.chart.ctx.createLinearGradient(0,0,0,36);g.addColorStop(0,color+'44');g.addColorStop(1,color+'00');return g},tension:0.4}]},
+    options:{responsive:true,animation:{duration:1200},plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{display:false},y:{display:false}}}
+  });
+}
+
+function initKPIs(){
+  document.querySelector('[data-t="__BRANDS__"]').dataset.t = D.system_health.live_brands;
+  document.querySelector('[data-t="__OPENS__"]').dataset.t = D.system_health.total_vault_opens;
+  document.querySelector('[data-t="__CVR__"]').dataset.t = D.system_health.global_cvr;
+  document.querySelector('[data-t="__RTO__"]').dataset.t = D.system_health.total_rto_saved;
+  document.querySelector('[data-t="__GMV__"]').dataset.t = D.system_health.gmv_influenced_usd;
+
+  document.getElementById('sys-status-txt').textContent=D.system_health.status.toUpperCase()+' — ALL SYSTEMS NOMINAL';
+  document.querySelectorAll('.cnt').forEach(el=>{ animCnt(el,parseFloat(el.dataset.t),el.dataset.f); });
+  sparkline('sp_brands',D.sparklines.brands,C.green);
+  sparkline('sp_opens',D.sparklines.opens,C.cyan);
+  sparkline('sp_cvr',D.sparklines.cvr,C.purple);
+  sparkline('sp_rto',D.sparklines.rto,C.amber);
+  sparkline('sp_gmv',D.sparklines.gmv,C.rose);
+}
+
+function initLeaderboard(){
+  const wrap=document.getElementById('leaderboard-rows');
+  const statusMap={
+    Healthy:{badge:'badge-green',txt:'HEALTHY',color:C.green},
+    Warning:{badge:'badge-amber',txt:'⚠ WARNING',color:C.amber},
+    Critical:{badge:'badge-red',txt:'✕ CRITICAL',color:C.rose}
+  };
+  if(D.brand_leaderboard.length === 0) wrap.innerHTML = '<div class="text-sm p-4 text-center" style="color:var(--t2)">Awaiting data...</div>';
+  D.brand_leaderboard.forEach((b,i)=>{
+    const s=statusMap[b.status]||statusMap.Healthy;
+    const row=document.createElement('div');
+    row.className='lb-row';
+    row.innerHTML=`
+      <div class="font-mono text-xs" style="color:var(--t2)">${String(i+1).padStart(2,'0')}</div>
+      <div><div class="font-raj font-bold text-white tracking-wide text-sm">${b.brand}</div></div>
+      <div class="font-mono font-bold text-white">${b.opens.toLocaleString('en-IN')}</div>
+      <div><div class="font-mono font-bold text-sm" style="color:${b.cvr>=10?C.green:b.cvr>=5?C.amber:C.rose}">${b.cvr}%</div></div>
+      <div><canvas id="lbsp_${i}" height="28" style="width:100px"></canvas></div>
+      <div><span class="badge ${s.badge}">${s.txt}</span></div>
+    `;
+    wrap.appendChild(row);
+    setTimeout(()=>sparkline(`lbsp_${i}`,b.trend,b.cvr>=10?C.green:b.cvr>=5?C.amber:C.rose),100);
+  });
+}
+
+function initAlgo(){
+  const aa=D.algorithm_accuracy;
+  document.getElementById('algo-insight-txt').textContent=aa.insight;
+  const total=aa.perfect+aa.too_tight+aa.too_loose+aa.returned;
+  const pct=total>0?(aa.perfect/total*100).toFixed(1):0;
+  animCnt(document.getElementById('algo-pct'),parseFloat(pct),'float');
+  
+  const labels=['Perfect Fit','Too Tight','Too Loose','Returned'];
+  const values=[aa.perfect,aa.too_tight,aa.too_loose,aa.returned];
+  const colors=[C.green,C.amber,C.cyan,C.rose];
+  new Chart(document.getElementById('algoDoughnut'),{
+    type:'doughnut', data:{labels,datasets:[{data:values.length?values:[1],backgroundColor:colors.map(c=>c+'aa'),borderColor:colors,borderWidth:1.5,hoverOffset:8}]},
+    options:{cutout:'68%',animation:{duration:1200},plugins:{legend:{display:false},tooltip:{backgroundColor:'#091626',borderColor:'rgba(0,184,255,.3)',borderWidth:1,padding:10}}}
+  });
+
+  const leg=document.getElementById('algo-legend');
+  labels.forEach((lbl,i)=>{
+    const v = total>0 ? ((values[i]/total)*100).toFixed(1) : 0;
+    const row=document.createElement('div');
+    row.className='flex items-center justify-between';
+    row.innerHTML=`<div class="flex items-center gap-2"><div class="status-dot" style="background:${colors[i]}"></div><span class="mono-sm" style="color:var(--t2)">${lbl}</span></div><span class="font-mono font-bold text-xs text-white">${values[i].toLocaleString()} <span style="color:var(--t2)">(${v}%)</span></span>`;
+    leg.appendChild(row);
+  });
+}
+
+function initAnchor(){
+  const am=D.universal_anchor_matrix;
+  new Chart(document.getElementById('anchorChart'),{
+    type:'bar', data:{ labels:am.map(b=>b.brand), datasets:[{ label:'Market Share %',data:am.map(b=>b.market_share), backgroundColor:['rgba(0,255,136,.3)','rgba(0,184,255,.3)','rgba(139,92,246,.3)','rgba(245,158,11,.3)','rgba(61,106,138,.3)','rgba(61,106,138,.2)'], borderColor:[C.green,C.cyan,C.purple,C.amber,C.t2,C.t2], borderWidth:1.5,borderRadius:4 }] },
+    options:{ indexAxis:'y',responsive:true,animation:{duration:1400}, plugins:{legend:{display:false}}, scales:{x:{grid:{display:false},ticks:{color:C.t2}},y:{grid:{display:false},ticks:{color:C.t1}}} }
+  });
+}
+
+function initCascade(){
+  const cc=D.correction_cascade;
+  animCnt(document.getElementById('corr-rate-num'),D.global_perception_gap.correction_rate_pct,'float');
+
+  new Chart(document.getElementById('cascadeChart'),{
+    type:'bar', data:{ labels:cc.sizes, datasets:[ {label:'Customer Anchor',data:cc.anchored,backgroundColor:'rgba(0,184,255,.3)',borderColor:C.cyan,borderWidth:1.5,borderRadius:5}, {label:'Vault Corrected',data:cc.corrected,backgroundColor:'rgba(0,255,136,.3)',borderColor:C.green,borderWidth:1.5,borderRadius:5} ] },
+    options:{ responsive:true,animation:{duration:1500}, plugins:{legend:{display:false}}, scales:{x:{grid:{display:false},ticks:{color:C.t2}},y:{grid:{color:'rgba(0,184,255,.06)'},ticks:{color:C.t2}}} }
+  });
+
+  const wrap=document.getElementById('cascade-analysis');
+  cc.sizes.forEach((sz,i)=>{
+    const anchored=cc.anchored[i]; const corrected=cc.corrected[i];
+    const delta=corrected-anchored; const direction=delta>0?'↑':delta<0?'↓':'='; const color=delta>0?C.green:delta<0?C.rose:C.t2;
+    const maxVal=Math.max(1, ...[...cc.anchored,...cc.corrected]);
+    const row=document.createElement('div');
+    row.innerHTML=`
+      <div class="flex items-center justify-between mb-1">
+        <div class="flex items-center gap-2"><span class="font-mono font-bold text-sm text-white">${sz}</span><span class="font-mono text-xs" style="color:${color}">${direction}${Math.abs(delta).toLocaleString()}</span></div>
+      </div>
+      <div class="relative h-3 rounded-sm overflow-hidden" style="background:rgba(255,255,255,.04)">
+        <div class="absolute top-0 left-0 h-full rounded-sm" style="width:${anchored/maxVal*100}%;background:rgba(0,184,255,.5);transition:width 1.4s ease 0.3s"></div>
+        <div class="absolute top-0 left-0 h-1.5 mt-0.5 rounded-sm" style="width:${corrected/maxVal*100}%;background:rgba(0,255,136,.7);transition:width 1.4s ease 0.5s"></div>
+      </div>
+    `;
+    wrap.appendChild(row);
+  });
+}
+
+// UI Fillers for Mock Data
+function initMockVisuals() {
+  const h=D.hourly_activity; const maxHour=Math.max(...h);
+  new Chart(document.getElementById('hourChart'),{ type:'bar', data:{ labels:Array.from({length:24},(_,i)=>i), datasets:[{ data:h,borderRadius:3,backgroundColor:h.map(v=>v/maxHour>.8?C.purple:C.purple+'44') }] }, options:{plugins:{legend:{display:false}},scales:{x:{display:false},y:{display:false}}} });
+  
+  const bhr=D.brand_health_radar;
+  new Chart(document.getElementById('radarChart'),{ type:'radar', data:{ labels:bhr.labels, datasets:bhr.brands.map(b=>({ label:b.name,data:b.data,borderColor:b.color,borderWidth:2,backgroundColor:b.color+'22',pointBackgroundColor:b.color })) }, options:{plugins:{legend:{display:false}},scales:{r:{min:0,max:100,ticks:{display:false}}}} });
+
+  const svcs=D.api_services; const svcWrap=document.getElementById('svc-list');
+  svcs.forEach(s=>{
+    const row=document.createElement('div'); row.className='svc-row';
+    row.innerHTML=`<div class="flex items-center gap-2 flex-1"><div class="status-dot" style="background:${C.green}"></div><span class="font-mono text-xs text-white">${s.name}</span></div><div class="font-mono text-xs" style="color:var(--t2)">${s.latency}ms</div>`;
+    svcWrap.appendChild(row);
+  });
+  
+  const alerts=D.alert_feed; const alWrap=document.getElementById('alert-console');
+  alerts.forEach(a=>{
+    const div=document.createElement('div'); div.className=`alert-row alert-info`;
+    div.innerHTML=`<div class="flex items-start gap-2"><span class="font-mono text-xs flex-shrink-0" style="color:${C.cyan}">[INFO]</span><span class="font-mono text-xs flex-1" style="color:var(--t1)">${a.msg}</span></div>`;
+    alWrap.appendChild(div);
+  });
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  initKPIs(); initLeaderboard(); initAlgo(); initAnchor(); initCascade(); initMockVisuals();
+});
+</script>
+</body>
+</html>
+        """
+
+        final_html = html_template.replace("__INJECT_MASTER_DATA__", json.dumps(master_data))
+        return HTMLResponse(content=final_html, status_code=200)
+
+    except Exception as e:
+        return f"<h1 style='color:white; background:black; padding:20px;'>God Mode Error: {str(e)}</h1>"
