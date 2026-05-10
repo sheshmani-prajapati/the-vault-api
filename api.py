@@ -63,7 +63,7 @@ async def track_event(payload: TrackingPayload):
             "brand_name": payload.brand or "Unknown Brand",
             "event_type": payload.event,
             "product_id": payload.product_id or "N/A",
-            "result_text": payload.result or "N/A"
+            "result_text": payload.result or "N/A",
             "product_price": payload.price
         }).execute()
         
