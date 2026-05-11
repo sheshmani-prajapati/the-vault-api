@@ -1339,10 +1339,11 @@ body::after{
     <canvas id="sp_rto" height="32" class="mt-2"></canvas>
   </div>
   <div class="card stripe stripe-rose p-4">
-    <div class="section-tag mb-3">GMV Influenced</div>
+    <div class="section-tag mb-3">Cart Pipeline Value</div>
     <div class="kpi-val" style="color:var(--rose)">₹<span class="cnt" data-t="__GMV__" data-f="comma">0</span></div>
     <div class="flex items-center justify-between mt-2">
-      <div class="section-tag">Vault-assisted Revenue</div>
+      <div class="section-tag">Vault-assisted intents</div>
+      <div class="badge badge-red" title="Assuming standard 30% cart conversion rate">Realized: ₹<span id="est-realized">0</span></div>
     </div>
     <canvas id="sp_gmv" height="32" class="mt-2"></canvas>
   </div>
