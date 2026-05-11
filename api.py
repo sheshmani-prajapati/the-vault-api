@@ -1493,6 +1493,10 @@ function sparkline(id,data,color){
 }
 
 function initKPIs(){
+  // --- NEW: Calculate the 30% Realized GMV ---
+  const pipelineValue = D.system_health.gmv_influenced_usd;
+  document.getElementById('est-realized').textContent = Math.round(pipelineValue * 0.30).toLocaleString('en-IN');
+
   document.querySelector('[data-t="__BRANDS__"]').dataset.t = D.system_health.live_brands;
   document.querySelector('[data-t="__OPENS__"]').dataset.t = D.system_health.total_vault_opens;
   document.querySelector('[data-t="__CVR__"]').dataset.t = D.system_health.global_cvr;
