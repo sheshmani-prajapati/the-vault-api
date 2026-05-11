@@ -986,15 +986,18 @@ async def admin_god_mode():
             if brand not in brand_stats:
                 brand_stats[brand] = {"opens": 0, "purchases": 0, "cvr": 0.0}
 
-            # Funnel & GMV
+            # Funnel & Pipeline Value
             if evt in global_funnel:
                 global_funnel[evt] += 1
             if evt == "widget_opened":
                 brand_stats[brand]["opens"] += 1
             if evt == "purchase_completed":
                 brand_stats[brand]["purchases"] += 1
+            
+            # --- NEW: Calculate exact Pipeline Value based on Add to Cart ---
+            if evt == "add_to_cart_intent":
                 gmv_total += price
-
+                
             # Global Feedback
             if evt == "verified_fit_feedback":
                 clean_feedback = res_text.replace("User reported: ", "").strip()
