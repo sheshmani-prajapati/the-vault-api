@@ -45,8 +45,8 @@ class TrackingPayload(BaseModel):
     price: Optional[float] = 0.0
 
 # --- NEW TRACKING ENDPOINT ---
-@app.post("/track_event")
-async def track_event(payload: TrackingPayload):
+@app.post("/sync_state")
+async def sync_state(payload: TrackingPayload):
     if not supabase:
         print("Warning: Event received but Supabase is not connected.")
         return {"status": "error", "message": "Database not configured"}
