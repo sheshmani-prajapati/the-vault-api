@@ -52,27 +52,22 @@ async def sync_state(payload: TrackingPayload):
         return {"status": "error", "message": "Database not configured"}
         
     try:
-        # 1. Upsert the User (Creates them if they are new, ignores if they exist)
-        supabase.table("vault_users").upsert({
-            "uuid": payload.uuid
-        }).execute()
-
-        # 2. Log the exact action they took to the tracking table
+        # We removed the vault_users upsert and product_price 
+        # so this perfectly matches your exact Supabase schema!
         supabase.table("tracking_events").insert({
             "user_uuid": payload.uuid,
             "brand_name": payload.brand or "Unknown Brand",
             "event_type": payload.event,
             "product_id": payload.product_id or "N/A",
-            "result_text": payload.result or "N/A",
-            "product_price": payload.price
+            "result_text": payload.result or "N/A"
         }).execute()
         
         return {"status": "success", "recorded_event": payload.event}
         
     except Exception as e:
-        # We catch the error silently so it NEVER crashes the Shopify cart
-        print(f"Vault Tracking Error: {str(e)}")
-        return {"status": "error", "message": "Failed to log event"}
+        # If it fails, print it to the Render logs so we can see it
+        print(f"Vault Supabase Error: {str(e)}")
+        return {"status": "error", "message": str(e)}
 
 # --- HELPER FUNCTIONS ---
 def safe_float(value):
