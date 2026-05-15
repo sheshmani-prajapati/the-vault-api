@@ -41,34 +41,35 @@ class TrackingPayload(BaseModel):
     product_id: Optional[str] = None
     brand: Optional[str] = None
     result: Optional[str] = None
-    uuid: Optional[str] = "anonymous" # Added the UUID from the Chrome Extension
+    uuid: Optional[str] = "anonymous"
     price: Optional[float] = 0.0
+    name: Optional[str] = "N/A"        # NEW
+    url: Optional[str] = "N/A"         # NEW
 
 # --- NEW TRACKING ENDPOINT ---
 @app.post("/sync_state")
 async def sync_state(payload: TrackingPayload):
     if not supabase:
-        print("Warning: Event received but Supabase is not connected.")
         return {"status": "error", "message": "Database not configured"}
         
     try:
-        # We removed the vault_users upsert and product_price 
-        # so this perfectly matches your exact Supabase schema!
         supabase.table("tracking_events").insert({
             "user_uuid": payload.uuid,
             "brand_name": payload.brand or "Unknown Brand",
             "event_type": payload.event,
             "product_id": payload.product_id or "N/A",
-            "result_text": payload.result or "N/A"
+            "result_text": payload.result or "N/A",
+            "product_price": payload.price,       # RESTORED
+            "product_name": payload.name,         # NEW
+            "page_url": payload.url               # NEW
         }).execute()
         
-        return {"status": "success", "recorded_event": payload.event}
+        return {"status": "success"}
         
     except Exception as e:
-        # If it fails, print it to the Render logs so we can see it
         print(f"Vault Supabase Error: {str(e)}")
         return {"status": "error", "message": str(e)}
-
+        
 # --- HELPER FUNCTIONS ---
 def safe_float(value):
     try:
