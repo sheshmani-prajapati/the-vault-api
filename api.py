@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 import json
@@ -309,7 +309,58 @@ def get_metadata():
         pass
         
     return brand_data
-    
+
+# --- SHOPIFY RETURN WEBHOOK CATCHER ---
+@app.post("/webhook/shopify_refund")
+async def shopify_refund_webhook(request: Request):
+    if not supabase:
+        return {"status": "ignored", "reason": "No database connection"}
+        
+    try:
+        # 1. Catch the raw JSON payload from Shopify
+        payload = await request.json()
+        
+        # 2. Dig through the returned items to find our Vault UUID
+        refund_line_items = payload.get("refund_line_items", [])
+        
+        for item in refund_line_items:
+            line_item = item.get("line_item", {})
+            properties = line_item.get("properties", [])
+            
+            vault_uuid = None
+            for prop in properties:
+                if prop.get("name") == "_Vault_User_ID":
+                    vault_uuid = prop.get("value")
+                    
+            # 3. If this was a Vault user, process the feedback
+            if vault_uuid:
+                brand = line_item.get("vendor", "Unknown Brand")
+                product_id = str(line_item.get("product_id", ""))
+                
+                # We simulate catching a "Too Tight" reason from a return portal.
+                inferred_reason = "Too Tight" 
+                
+                # 4. Inject straight into the Flywheel!
+                supabase.table("tracking_events").insert({
+                    "user_uuid": vault_uuid,
+                    "brand_name": brand,
+                    "event_type": "verified_fit_feedback",
+                    "product_id": product_id,
+                    "result_text": inferred_reason,
+                    "product_price": 0.0,
+                    "product_name": line_item.get("title", "Refunded Item"),
+                    "page_url": "Shopify_Webhook"
+                }).execute()
+                
+                print(f"🔄 FLYWHEEL TRIGGERED: Logged {inferred_reason} for {brand}")
+                
+        return {"status": "success"}
+        
+    except Exception as e:
+        print(f"Webhook Error: {str(e)}")
+        # We always return 200 OK to Shopify so they don't disable our webhook
+        return {"status": "received_with_errors"}
+
 # --- B2B ENTERPRISE DASHBOARD ---
 @app.get("/dashboard", response_class=HTMLResponse)
 async def b2b_dashboard(brand: str = "Snitch"):
