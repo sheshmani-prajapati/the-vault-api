@@ -53,15 +53,22 @@ async def sync_state(payload: TrackingPayload):
         return {"status": "error", "message": "Database not configured"}
         
     try:
+        # 1. THE FIX: Introduce the new user to the database first!
+        # This creates the user if they are new, and ignores if they already exist.
+        supabase.table("vault_users").upsert({
+            "uuid": payload.uuid
+        }).execute()
+
+        # 2. Now log the event (Supabase's bouncer will allow this now)
         supabase.table("tracking_events").insert({
             "user_uuid": payload.uuid,
             "brand_name": payload.brand or "Unknown Brand",
             "event_type": payload.event,
             "product_id": payload.product_id or "N/A",
             "result_text": payload.result or "N/A",
-            "product_price": payload.price,       # RESTORED
-            "product_name": payload.name,         # NEW
-            "page_url": payload.url               # NEW
+            "product_price": payload.price,
+            "product_name": payload.name,
+            "page_url": payload.url
         }).execute()
         
         return {"status": "success"}
