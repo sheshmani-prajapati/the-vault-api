@@ -1,0 +1,205 @@
+{% if product %}
+<style>
+  #vault-widget-container .vault-wrapper { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 18px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  #vault-widget-container .vault-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  #vault-widget-container .vault-title { font-size: 13px; font-weight: 600; margin: 0; text-transform: uppercase; letter-spacing: 0.5px; color: #000; }
+  #vault-widget-container .vault-btn { width: 100%; background: #fff; color: #000; border: 1px solid #cbd5e1; padding: 14px; font-size: 14px; font-weight: 500; cursor: pointer; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s ease; }
+  #vault-widget-container .vault-btn:hover { border-color: #000; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); }
+  #vault-widget-container .vault-btn-icon { color: #2563eb; font-weight: bold; }
+  #vault-widget-container .vault-modal { max-height: 0; overflow: hidden; transition: max-height 0.4s ease-out; }
+  #vault-widget-container .vault-modal.open { max-height: 500px; margin-top: 15px; border-top: 1px solid #e2e8f0; padding-top: 15px; }
+  #vault-widget-container .vault-label { font-size: 12px; color: #64748b; margin-bottom: 6px; display: block; }
+  #vault-widget-container select { width: 100%; padding: 12px 40px 12px 14px; margin-bottom: 12px; border: 1px solid #e2e8f0; border-radius: 4px; background: #fff; font-size: 14px; color: #000; cursor: pointer; transition: border-color 0.2s; appearance: none; background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23333' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e"); background-repeat: no-repeat; background-position: right 14px center; background-size: 16px; }
+  #vault-widget-container select:focus { outline: none; border-color: #000; }
+  #vault-widget-container .find-size-btn { width: 100%; background: #2563eb; color: #fff; border: none; padding: 14px; font-weight: 600; font-size: 14px; border-radius: 4px; cursor: pointer; margin-bottom: 10px; transition: background 0.2s; }
+  #vault-widget-container .find-size-btn:hover { background: #1d4ed8; }
+  #vault-widget-container .vault-result-box { display: none; padding: 16px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 4px; text-align: center; }
+  #vault-widget-container .vault-size-highlight { font-size: 26px; font-weight: 900; color: #059669; margin: 6px 0; }
+  #vault-widget-container .vault-warning-text { font-size: 12px; color: #334155; margin: 0; line-height: 1.5; text-align: left; border-top: 1px solid #d1fae5; padding-top: 12px; margin-top: 12px; }
+</style>
+
+<div id="vault-widget-container" style="margin: 15px 0;">
+  <div id="vault-widget-{{ block.id }}" class="vault-wrapper">
+    <div class="vault-header"><p class="vault-title">Don't know your size?</p></div>
+    <button class="vault-btn" id="vaultToggleBtn-{{ block.id }}" type="button">
+      <span>Match size with a shirt you own</span><span class="vault-btn-icon">✨ Try The Vault</span>
+    </button>
+    <div class="vault-modal" id="vaultModal-{{ block.id }}">
+      <span class="vault-label">Brand you currently wear</span><select id="refBrand-{{ block.id }}"><option value="">Loading brands…</option></select>
+      <span class="vault-label">Fit Style</span><select id="refFit-{{ block.id }}"><option value="">Select Fit…</option></select>
+      <span class="vault-label">Size</span><select id="refSize-{{ block.id }}"><option value="">Select Size…</option></select>
+      <button class="find-size-btn" id="vaultCalculateBtn-{{ block.id }}" type="button">Calculate Exact Match</button>
+      <div class="vault-result-box" id="vaultResultBox-{{ block.id }}">
+        <p style="margin: 0; font-size: 12px; color: #059669; font-weight: 600; text-transform: uppercase;">Confidence: 98% Match</p>
+        <p class="vault-size-highlight" id="vaultRecSize-{{ block.id }}">--</p>
+        <p class="vault-warning-text" id="vaultRecWarning-{{ block.id }}">--</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+    document.addEventListener("DOMContentLoaded", function() {
+        const vx_prod_id = "{{ product.id }}";
+        const vx_brand = "{{ product.vendor | escape }}";
+        const vx_price = {{ product.price | default: 0 | divided_by: 100.0 }};
+        const vx_name = "{{ product.title | escape }}";
+        const vx_url = window.location.href;
+        const vx_block = "{{ block.id }}";
+
+        function vx_get_token() {
+            let u = localStorage.getItem('vault_identity_v2'); 
+            if (!u || u === "anonymous" || u === "null") {
+                u = 'vault_user_' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+                localStorage.setItem('vault_identity_v2', u);
+            }
+            return u;
+        }
+        const vx_user_token = vx_get_token();
+
+        const vx_initialItems = {{ cart.items | map: 'product_id' | json }} || [];
+        if (vx_initialItems.map(String).includes(vx_prod_id.toString())) {
+            sessionStorage.setItem('vault_added_' + vx_prod_id, 'true');
+        }
+
+        function vx_track(evName, evResult) {
+            console.log(`🚀 [Vault Debug] Sending: ${evName}`);
+            fetch('https://unity-sizing.onrender.com/sync_state', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    event: evName, product_id: vx_prod_id, brand: vx_brand || "Unknown",            
+                    result: evResult || "N/A", uuid: vx_user_token, price: vx_price, name: vx_name, url: vx_url                
+                })
+            }).catch(e => console.error("💥 [Vault Error]:", e));
+        }
+
+        const vx_btnToggle = document.getElementById('vaultToggleBtn-' + vx_block);
+        const vx_modalBox = document.getElementById('vaultModal-' + vx_block);
+        const vx_btnCalc = document.getElementById('vaultCalculateBtn-' + vx_block);
+        const vx_selBrand = document.getElementById('refBrand-' + vx_block);
+        const vx_selFit = document.getElementById('refFit-' + vx_block);
+        const vx_selSize = document.getElementById('refSize-' + vx_block);
+
+        vx_track('widget_rendered', "Impression Logged");
+
+        if (vx_btnToggle && vx_modalBox) {
+            vx_btnToggle.addEventListener('click', function(e) {
+                e.stopPropagation(); vx_modalBox.classList.toggle('open');
+            });
+        }
+
+        function vx_handle_intercept(e) {
+            const vx_rec = sessionStorage.getItem('vault_recommended_size');
+            const hasProductInCart = sessionStorage.getItem('vault_added_' + vx_prod_id) === 'true';
+
+            if (hasProductInCart && !vx_rec) {
+                e.preventDefault(); e.stopImmediatePropagation();
+                const now = Date.now();
+                const lastBlock = parseInt(sessionStorage.getItem('vault_block_time') || "0");
+                if (now - lastBlock > 500) {
+                    sessionStorage.setItem('vault_block_time', now.toString());
+                    vx_track('bracketing_intercepted', "Intercepted inside Page Drawer Context");
+                    if (vx_modalBox) {
+                        vx_modalBox.classList.add('open');
+                        document.getElementById('vault-widget-' + vx_block).scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }
+                return true;
+            }
+            return false;
+        }
+
+        document.addEventListener('submit', function(e) {
+            if (e.target && e.target.action && e.target.action.includes('/cart/add')) {
+                const wasBlocked = vx_handle_intercept(e);
+                if (!wasBlocked) {
+                    sessionStorage.setItem('vault_added_' + vx_prod_id, 'true');
+                    vx_track('add_to_cart_intent', `Size used: ${sessionStorage.getItem('vault_recommended_size') || "Unknown"}`);
+                }
+            }
+        }, true);
+
+        document.addEventListener('click', function(e) {
+            const tBtn = e.target.closest('button, input[type="submit"], a, [role="button"]');
+            if (!tBtn) return;
+            const txt = (tBtn.innerText || tBtn.value || tBtn.textContent || "").toLowerCase().trim();
+            const isATC = ['add to cart', 'add to bag', 'buy now'].some(p => txt.includes(p)) || tBtn.matches('[name="add"], .product-form__submit, .add-to-cart');
+            
+            if (isATC) {
+                const wasBlocked = vx_handle_intercept(e);
+                if (!wasBlocked) {
+                    const parentForm = tBtn.closest('form[action^="/cart/add"]');
+                    if (!parentForm) {
+                        sessionStorage.setItem('vault_added_' + vx_prod_id, 'true');
+                        vx_track('add_to_cart_intent', `Size used: ${sessionStorage.getItem('vault_recommended_size') || "Unknown"}`);
+                    }
+                }
+            }
+        }, true);
+
+        // Meta processing engine
+        async function vx_load_meta() {
+            try {
+                const res = await fetch('https://unity-sizing.onrender.com/meta');
+                window.vx_meta_data = await res.json();
+                if(vx_selBrand) {
+                    vx_selBrand.innerHTML = '<option value="">Select Brand...</option>';
+                    Object.keys(window.vx_meta_data).sort().forEach(b => {
+                        if (b.toLowerCase() !== vx_brand.toLowerCase()) vx_selBrand.appendChild(new Option(b, b));
+                    });
+                }
+            } catch (e) {}
+        }
+        vx_load_meta();
+
+        if (vx_selBrand && vx_selFit) {
+            vx_selBrand.addEventListener('change', () => {
+                vx_selFit.innerHTML = '<option value="">Select Fit...</option>'; vx_selSize.innerHTML = '<option value="">Select Size...</option>';
+                const sb = vx_selBrand.value; if (!sb || !window.vx_meta_data[sb]) return;
+                Object.keys(window.vx_meta_data[sb]).sort().forEach(f => vx_selFit.appendChild(new Option(f + " Fit", f)));
+            });
+        }
+
+        if (vx_selFit && vx_selSize) {
+            vx_selFit.addEventListener('change', () => {
+                vx_selSize.innerHTML = '<option value="">Select Size...</option>';
+                const sb = vx_selBrand.value; const sf = vx_selFit.value; if (!sb || !sf || !window.vx_meta_data[sb][sf]) return;
+                window.vx_meta_data[sb][sf].forEach(s => vx_selSize.appendChild(new Option(s, s)));
+            });
+        }
+
+        if (vx_btnCalc) {
+            vx_btnCalc.addEventListener('click', async function() {
+                if(!vx_selBrand.value || !vx_selFit.value || !vx_selSize.value) { alert("Please select all options first."); return; }
+                vx_btnCalc.innerText = "Analyzing Match...";
+                try {
+                    const r = await fetch(`https://unity-sizing.onrender.com/get_fit?ref_brand=${vx_selBrand.value}&ref_fit=${vx_selFit.value}&ref_size=${vx_selSize.value}&target_brand=${vx_brand}&target_fit=Regular Fit`);
+                    const d = await r.json();
+                    if(r.ok) {
+                        document.getElementById('vaultRecSize-' + vx_block).innerText = "SIZE " + d.recommended_size;
+                        document.getElementById('vaultRecWarning-' + vx_block).innerText = d.warning;
+                        document.getElementById('vaultResultBox-' + vx_block).style.display = 'block';
+                        vx_btnCalc.innerText = "Calculate Exact Match";
+                        sessionStorage.setItem('vault_recommended_size', d.recommended_size);
+                        vx_track('size_calculated', `Rec: ${d.recommended_size} (from ${vx_selBrand.value})`);
+                    } else {
+                        alert("Error"); vx_btnCalc.innerText = "Calculate Exact Match";
+                    }
+                } catch (error) { vx_btnCalc.innerText = "Calculate Exact Match"; }
+            });
+        }
+    });
+})();
+</script>
+{% endif %}
+
+{% schema %}
+{
+  "name": "The Vault",
+  "target": "section",
+  "enabled_on": { "templates": ["product"] },
+  "settings": []
+}
+{% endschema %}
