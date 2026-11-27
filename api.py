@@ -12,6 +12,9 @@ import traceback
 
 app = FastAPI(title="The Vault API - v3.5 (With Persistent Supabase)")
 
+from scan import router as scan_router
+app.include_router(scan_router)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
